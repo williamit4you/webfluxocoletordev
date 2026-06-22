@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@/lib/api";
-import type { Field, FieldOption, Flow, FlowToken, Step, StepApiConfig } from "@/lib/types";
+import type { Field, FieldOption, Flow, FlowToken, IntegrationTestResult, Step, StepApiConfig } from "@/lib/types";
 import { Eye, EyeOff, PencilLine, Plus, Save, Send, Shield, Trash2, Workflow } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -84,6 +84,9 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
   const [visibleTokens, setVisibleTokens] = useState<Record<number, boolean>>({});
   const [flowStatus, setFlowStatus] = useState("Draft");
   const [flowVersion, setFlowVersion] = useState(1);
+  const [testPayload, setTestPayload] = useState('{\n  "chaveAcesso": "12345678901234567890123456789012345678901234"\n}');
+  const [testingStepId, setTestingStepId] = useState<string>("");
+  const [testResult, setTestResult] = useState<IntegrationTestResult | null>(null);
 
   useEffect(() => {
     if (!flowId) {
@@ -276,6 +279,37 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
       setError(e instanceof Error ? e.message : "Nao foi possivel publicar o fluxo.");
     } finally {
       setPublishing(false);
+    }
+  }
+
+  async function testIntegration() {
+    if (!flowId || !currentStep?.id) {
+      setError("Salve o rascunho da etapa antes de testar a integracao.");
+      return;
+    }
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(testPayload);
+    } catch {
+      setError("O JSON de teste esta invalido.");
+      return;
+    }
+
+    setTestingStepId(currentStep.id);
+    setError("");
+    setTestResult(null);
+
+    try {
+      const result = await api<IntegrationTestResult>(`/flows/${flowId}/steps/${currentStep.id}/test-integration`, {
+        method: "POST",
+        body: JSON.stringify({ data: parsed })
+      });
+      setTestResult(result);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Nao foi possivel testar a integracao.");
+    } finally {
+      setTestingStepId("");
     }
   }
 
@@ -545,6 +579,30 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                   Validar certificado TLS/HTTPS
                 </label>
               </div>
+            </div>
+
+            <div className="editor-block">
+              <div className="section-header">
+                <div>
+                  <h4>Teste controlado</h4>
+                  <p className="section-copy">Salve o rascunho e teste com um JSON de exemplo sem avancar execucoes reais.</p>
+                </div>
+                <button className="btn btn-secondary" type="button" disabled={!flowId || !currentStep.id || testingStepId === currentStep.id} onClick={testIntegration}>
+                  <Send size={15} />
+                  {testingStepId === currentStep.id ? "Testando..." : "Testar integracao"}
+                </button>
+              </div>
+              <div className="field">
+                <label>JSON de exemplo</label>
+                <textarea className="textarea" value={testPayload} onChange={e => setTestPayload(e.target.value)} />
+              </div>
+              {testResult && <div className={testResult.success ? "notice" : "error"} style={{ marginTop: 12 }}>
+                <strong>{testResult.success ? "Integracao concluida" : "Integracao falhou"}</strong>
+                <div style={{ marginTop: 6 }}>Metodo: {testResult.method} | Status: {testResult.statusCode ?? "sem resposta"} | Tempo: {testResult.durationMs} ms</div>
+                <div style={{ marginTop: 6, wordBreak: "break-word" }}>URL: {testResult.url}</div>
+                {testResult.responsePreview && <pre style={{ whiteSpace: "pre-wrap", marginTop: 10 }}>{testResult.responsePreview}</pre>}
+                {testResult.errorMessage && <div style={{ marginTop: 8 }}>{testResult.errorMessage}</div>}
+              </div>}
             </div>
           </div>}
         </div>}

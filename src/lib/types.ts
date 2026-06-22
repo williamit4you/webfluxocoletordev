@@ -5,5 +5,6 @@ export type FlowToken={id?:string;name:string;value?:string;type:number;headerNa
 export type StepApiConfig={url?:string;method?:string;tokenName?:string;scheduleMode?:string;scheduleValue?:string;queryTemplate?:string;validateTls:boolean};
 export type Step={id?:string;name:string;description?:string;type:number;order:number;assignedUserId?:string;fields:Field[];apiConfig?:StepApiConfig|null};
 export type Flow={id:string;flowKey:string;name:string;description:string;active:boolean;versionNumber:number;lifecycleStatus:string;publishedAt?:string|null;hasDraft:boolean;tokens:FlowToken[];steps:Step[]};
+export type IntegrationTestResult={success:boolean;statusCode?:number|null;durationMs:number;url:string;method:string;responsePreview?:string|null;errorMessage?:string|null};
 export type Progress={id:string;name:string;order:number;type:number;status:number;startedAt?:string;completedAt?:string};
 export type Instance={id:string;flowDefinitionId:string;flowName:string;code:string;status:number;currentStepOrder:number;createdAt:string;updatedAt:string;data:Record<string,unknown>;steps:Progress[]};
