@@ -1,6 +1,9 @@
 export type User={id:string;name:string;email:string;role:string;active?:boolean};
-export type Field={id?:string;key:string;label:string;type:number;required:boolean;order:number;optionsJson?:string};
-export type Step={id?:string;name:string;description?:string;type:number;order:number;assignedUserId?:string;configurationJson?:string};
-export type Flow={id:string;name:string;description:string;entryType:number;active:boolean;fields:Field[];steps:Step[]};
+export type FieldOption={id?:string;label:string;value:string;order:number};
+export type Field={id?:string;key:string;label:string;type:number;required:boolean;order:number;options:FieldOption[]};
+export type FlowToken={id?:string;name:string;value?:string;type:number;headerName?:string;active:boolean};
+export type StepApiConfig={url?:string;method?:string;tokenName?:string;scheduleMode?:string;scheduleValue?:string;queryTemplate?:string;validateTls:boolean};
+export type Step={id?:string;name:string;description?:string;type:number;order:number;assignedUserId?:string;fields:Field[];apiConfig?:StepApiConfig|null};
+export type Flow={id:string;name:string;description:string;active:boolean;tokens:FlowToken[];steps:Step[]};
 export type Progress={id:string;name:string;order:number;type:number;status:number;startedAt?:string;completedAt?:string};
 export type Instance={id:string;flowDefinitionId:string;flowName:string;code:string;status:number;currentStepOrder:number;createdAt:string;updatedAt:string;data:Record<string,unknown>;steps:Progress[]};
