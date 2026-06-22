@@ -1,4 +1,4 @@
-export type User={id:string;name:string;email:string;role:string};
+export type User={id:string;name:string;email:string;role:string;active?:boolean};
 export type Field={id?:string;key:string;label:string;type:number;required:boolean;order:number;optionsJson?:string};
 export type Step={id?:string;name:string;description?:string;type:number;order:number;assignedUserId?:string;configurationJson?:string};
 export type Flow={id:string;name:string;description:string;entryType:number;active:boolean;fields:Field[];steps:Step[]};
