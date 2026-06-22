@@ -1,0 +1,4 @@
+"use client";
+import {createContext,useContext,useEffect,useState} from "react";import {usePathname,useRouter} from "next/navigation";import type{User}from"@/lib/types";
+const Context=createContext<{user:User|null;logout:()=>void}>({user:null,logout:()=>{}});
+export function AuthProvider({children}:{children:React.ReactNode}){const [user,setUser]=useState<User|null>(null);const [ready,setReady]=useState(false);const path=usePathname();const router=useRouter();useEffect(()=>{const raw=localStorage.getItem("flowtrack_user");const token=localStorage.getItem("flowtrack_token");if(raw&&token)setUser(JSON.parse(raw));else if(path!=="/login")router.replace("/login");setReady(true)},[path,router]);function logout(){localStorage.clear();setUser(null);router.push("/login")}if(!ready)return <div className="empty">Carregando…</div>;return <Context.Provider value={{user,logout}}>{children}</Context.Provider>};export const useAuth=()=>useContext(Context);
