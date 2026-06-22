@@ -12,7 +12,7 @@ export default function FlowsPage() {
   const [flows, setFlows] = useState<Flow[]>([]);
 
   useEffect(() => {
-    api<Flow[]>("/flows").then(setFlows);
+    api<Flow[]>("/flows?scope=builder").then(setFlows);
   }, []);
 
   return <>
@@ -36,9 +36,11 @@ export default function FlowsPage() {
           <h2 className="section-title" style={{ marginTop: 14 }}>{flow.name}</h2>
           <p className="section-copy">{flow.description}</p>
           <div className="flow-card-metrics">
+            <span>v{flow.versionNumber}</span>
             <span>{flow.steps.length} etapa(s)</span>
             <span>{flow.steps.reduce((sum, step) => sum + step.fields.length, 0)} campo(s)</span>
             <span>{flow.tokens.length} token(s)</span>
+            <span>{flow.lifecycleStatus === "Draft" ? "Rascunho" : "Publicado"}</span>
           </div>
         </article>)}
     </div>
