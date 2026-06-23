@@ -72,7 +72,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
   const [tokens, setTokens] = useState<FlowToken[]>([]);
   const [steps, setSteps] = useState<Step[]>([
     { ...createStep("Entrada do caminhao"), type: 0 },
-    { ...createStep("Saida para Sandra"), type: 1 }
+    { ...createStep("Saida"), type: 1 }
   ]);
   const [editingStep, setEditingStep] = useState(0);
   const [loading, setLoading] = useState(!!flowId);
