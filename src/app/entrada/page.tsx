@@ -14,6 +14,14 @@ function renderInput(field: Field, value: string, onChange: (next: string) => vo
     </select>;
   }
 
+  if (field.type === 6) {
+    return <select className="select" value={value} onChange={e => onChange(e.target.value)}>
+      <option value="">Selecione</option>
+      <option value="true">Sim</option>
+      <option value="false">Nao</option>
+    </select>;
+  }
+
   if (field.key === "observacoes") {
     return <textarea className="textarea" value={value} onChange={e => onChange(e.target.value)} />;
   }
