@@ -1,6 +1,7 @@
 export type User={id:string;name:string;email:string;role:string;active?:boolean};
 export type FieldOption={id?:string;label:string;value:string;order:number};
-export type Field={id?:string;key:string;label:string;type:number;required:boolean;order:number;options:FieldOption[]};
+export type Field={id?:string;key:string;label:string;type:number;mask?:string|null;required:boolean;order:number;options:FieldOption[]};
+export type ExecutionField={id?:string;key:string;label:string;type:number;mask?:string|null;required:boolean;order:number;options:FieldOption[];value?:string|null};
 export type FlowToken={id?:string;name:string;value?:string;type:number;headerName?:string;active:boolean};
 export type ResponseFieldMapping={fieldKey:string;responsePath:string};
 export type BodyFieldMapping={targetKey:string;sourceReference:string};
@@ -8,5 +9,6 @@ export type StepApiConfig={url?:string;method?:string;tokenName?:string;schedule
 export type Step={id?:string;name:string;description?:string;type:number;order:number;assignedUserId?:string;fields:Field[];apiConfig?:StepApiConfig|null};
 export type Flow={id:string;flowKey:string;name:string;description:string;active:boolean;versionNumber:number;lifecycleStatus:string;publishedAt?:string|null;hasDraft:boolean;tokens:FlowToken[];steps:Step[]};
 export type IntegrationTestResult={success:boolean;statusCode?:number|null;durationMs:number;url:string;method:string;responsePreview?:string|null;errorMessage?:string|null;mappedFields?:Record<string,string>|null};
-export type Progress={id:string;name:string;order:number;type:number;status:number;startedAt?:string;completedAt?:string};
-export type Instance={id:string;flowDefinitionId:string;flowName:string;code:string;status:number;currentStepOrder:number;createdAt:string;updatedAt:string;data:Record<string,unknown>;steps:Progress[]};
+export type IntegrationAttempt={id:string;triggerType:string;method:string;url:string;responseStatusCode?:number|null;success:boolean;durationMs:number;createdAt:string;responsePreview?:string|null;errorMessage?:string|null};
+export type Progress={id:string;flowStepId:string;name:string;order:number;type:number;status:number;startedAt?:string;completedAt?:string;completedByUserId?:string|null;completedByName?:string|null;notes?:string|null;isAutomatic:boolean;data:Record<string,unknown>;fields:ExecutionField[];integrationAttempts:IntegrationAttempt[]};
+export type Instance={id:string;flowDefinitionId:string;flowName:string;code:string;status:number;currentStepOrder:number;createdAt:string;updatedAt:string;data:Record<string,unknown>;currentStepExecutionId?:string|null;steps:Progress[]};

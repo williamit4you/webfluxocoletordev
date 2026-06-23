@@ -19,10 +19,38 @@ const fieldTypeOptions = [
   { value: 0, label: "Texto" },
   { value: 1, label: "Numero" },
   { value: 2, label: "Data" },
-  { value: 3, label: "Documento" },
+  { value: 3, label: "Anexo" },
   { value: 4, label: "E-mail" },
   { value: 5, label: "Lista" },
-  { value: 6, label: "Sim / Nao" }
+  { value: 6, label: "Sim / Nao" },
+  { value: 7, label: "Foto" },
+  { value: 8, label: "Radio" }
+];
+
+const maskOptions = [
+  { value: "", label: "Sem mascara" },
+  { value: "cep", label: "CEP" },
+  { value: "cpf", label: "CPF" },
+  { value: "cnpj", label: "CNPJ" },
+  { value: "telefone", label: "Telefone" },
+  { value: "celular", label: "Celular" },
+  { value: "valor", label: "Valor monetario" },
+  { value: "data", label: "Data" },
+  { value: "email", label: "E-mail" }
+];
+
+const intervalPresets = [
+  { label: "5 minutos", value: "5 minutos" },
+  { label: "15 minutos", value: "15 minutos" },
+  { label: "30 minutos", value: "30 minutos" },
+  { label: "1 hora", value: "60 minutos" }
+];
+
+const cronPresets = [
+  { label: "A cada 30 min", value: "*/30 * * * *" },
+  { label: "Todo dia 08:00", value: "0 8 * * *" },
+  { label: "Todo dia 12:00", value: "0 12 * * *" },
+  { label: "Todo dia 18:00", value: "0 18 * * *" }
 ];
 
 function slugify(value: string) {
@@ -47,7 +75,7 @@ function createOption(): FieldOption {
 }
 
 function createField(): Field {
-  return { label: "", key: "", type: 0, required: false, order: 1, options: [] };
+  return { label: "", key: "", type: 0, mask: "", required: false, order: 1, options: [] };
 }
 
 function createApiConfig(): StepApiConfig {
@@ -85,6 +113,26 @@ function normalizeBodyTargetKey(value: string) {
 
 function typeNeedsApi(stepType: number) {
   return stepType === 2 || stepType === 4 || stepType === 5;
+}
+
+function fieldSupportsOptions(fieldType: number) {
+  return fieldType === 5 || fieldType === 8;
+}
+
+function fieldSupportsMask(fieldType: number) {
+  return fieldType !== 5 && fieldType !== 6 && fieldType !== 8 && fieldType !== 3 && fieldType !== 7;
+}
+
+function scheduleHelperText(scheduleMode?: string, scheduleValue?: string) {
+  if (scheduleMode === "interval" && scheduleValue) {
+    return `A consulta tentara executar em intervalo de ${scheduleValue}.`;
+  }
+
+  if (scheduleMode === "cron" && scheduleValue) {
+    return `Expressao cron configurada: ${scheduleValue}.`;
+  }
+
+  return "Use os atalhos abaixo para preencher mais rapido e reduzir erros.";
 }
 
 type IntegrationFieldReference = {
@@ -694,8 +742,15 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                       disabled={!isDraft}
                     />
                     <input className="input" placeholder="chave_do_campo" value={field.key} onChange={e => updateField(editingStep, fieldIndex, { key: slugify(e.target.value) })} disabled={!isDraft} />
-                    <select className="select" value={field.type} onChange={e => updateField(editingStep, fieldIndex, { type: Number(e.target.value), options: Number(e.target.value) === 5 ? (field.options.length ? field.options : [createOption()]) : [] })} disabled={!isDraft}>
+                    <select className="select" value={field.type} onChange={e => updateField(editingStep, fieldIndex, {
+                      type: Number(e.target.value),
+                      mask: fieldSupportsMask(Number(e.target.value)) ? field.mask ?? "" : "",
+                      options: fieldSupportsOptions(Number(e.target.value)) ? (field.options.length ? field.options : [createOption()]) : []
+                    })} disabled={!isDraft}>
                       {fieldTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <select className="select" value={field.mask ?? ""} onChange={e => updateField(editingStep, fieldIndex, { mask: e.target.value || "" })} disabled={!isDraft || !fieldSupportsMask(field.type)}>
+                      {maskOptions.map(option => <option key={option.value || "empty"} value={option.value}>{option.label}</option>)}
                     </select>
                     <label className="toggle-line compact">
                       <input type="checkbox" checked={field.required} onChange={e => updateField(editingStep, fieldIndex, { required: e.target.checked })} disabled={!isDraft} />
@@ -706,11 +761,11 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                     </button>
                   </div>
 
-                  {field.type === 5 && <div className="options-box">
+                  {fieldSupportsOptions(field.type) && <div className="options-box">
                     <div className="section-header">
                       <div>
-                        <h4>Opcoes da lista</h4>
-                        <p className="section-copy">Cada item pode ter nome e valor proprios.</p>
+                        <h4>{field.type === 8 ? "Opcoes do radio" : "Opcoes da lista"}</h4>
+                        <p className="section-copy">{field.type === 8 ? "Cadastre as opcoes exibidas como selecao unica em botoes." : "Cada item pode ter nome e valor proprios."}</p>
                       </div>
                       <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => updateField(editingStep, fieldIndex, { options: [...field.options, createOption()] })}>
                         <Plus size={14} />
@@ -768,10 +823,22 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                   <option value="cron">Cron</option>
                 </select>
               </div>
+              {(currentStep.apiConfig?.scheduleMode === "interval" || currentStep.apiConfig?.scheduleMode === "cron") && <div className="field span2">
+                <label>Atalhos de preenchimento</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {(currentStep.apiConfig?.scheduleMode === "interval" ? intervalPresets : cronPresets).map(preset =>
+                    <button key={preset.value} className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateApiConfig(editingStep, { scheduleValue: preset.value })}>
+                      {preset.label}
+                    </button>)}
+                </div>
+              </div>}
               {(currentStep.apiConfig?.scheduleMode === "interval" || currentStep.apiConfig?.scheduleMode === "cron") &&
                 <div className="field span2">
                   <label>{currentStep.apiConfig?.scheduleMode === "interval" ? "Intervalo" : "Expressao cron"}</label>
                   <input className="input" placeholder={currentStep.apiConfig?.scheduleMode === "interval" ? "Ex.: 30 minutos" : "Ex.: */30 * * * *"} value={currentStep.apiConfig?.scheduleValue ?? ""} onChange={e => updateApiConfig(editingStep, { scheduleValue: e.target.value })} disabled={!isDraft} />
+                  <div className="section-copy" style={{ marginTop: 8 }}>
+                    {scheduleHelperText(currentStep.apiConfig?.scheduleMode, currentStep.apiConfig?.scheduleValue)}
+                  </div>
                 </div>}
               {currentStep.type === 5 &&
                 <div className="field span2">

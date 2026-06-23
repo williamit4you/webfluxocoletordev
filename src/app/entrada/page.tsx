@@ -14,12 +14,25 @@ function renderInput(field: Field, value: string, onChange: (next: string) => vo
     </select>;
   }
 
+  if (field.type === 8) {
+    return <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+      {field.options.map((option, index) => <label key={`${option.value}-${index}`} className="toggle-line compact">
+        <input type="radio" name={field.key} checked={value === option.value} onChange={() => onChange(option.value)} />
+        {option.label}
+      </label>)}
+    </div>;
+  }
+
   if (field.type === 6) {
     return <select className="select" value={value} onChange={e => onChange(e.target.value)}>
       <option value="">Selecione</option>
       <option value="true">Sim</option>
       <option value="false">Nao</option>
     </select>;
+  }
+
+  if (field.type === 3 || field.type === 7) {
+    return <div className="notice">Campo de {field.type === 7 ? "foto" : "anexo"} será habilitado na próxima entrega da Etapa 3.</div>;
   }
 
   if (field.key === "observacoes") {
