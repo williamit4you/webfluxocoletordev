@@ -11,7 +11,7 @@ const items = [
   { href: "/fluxos", label: "Fluxos", icon: Workflow },
   { href: "/fluxos/novo", label: "Criar fluxo", icon: FilePlus2, roles: ["SuperAdmin"] },
   { href: "/usuarios", label: "Usuários", icon: Users, roles: ["SuperAdmin", "Admin"] },
-  { href: "/configuracao", label: "Configuração", icon: Settings2 }
+  { href: "/configuracao", label: "Configuração", icon: Settings2, roles: ["SuperAdmin"] }
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
