@@ -123,7 +123,11 @@ function fieldSupportsMask(fieldType: number) {
   return fieldType !== 5 && fieldType !== 6 && fieldType !== 8 && fieldType !== 3 && fieldType !== 7;
 }
 
-function scheduleHelperText(scheduleMode?: string, scheduleValue?: string) {
+function scheduleHelperText(scheduleMode?: string, scheduleValue?: string, helperText?: string | null) {
+  if (helperText) {
+    return helperText;
+  }
+
   if (scheduleMode === "interval" && scheduleValue) {
     return `A consulta tentara executar em intervalo de ${scheduleValue}.`;
   }
@@ -763,9 +767,9 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
 
                   {fieldSupportsOptions(field.type) && <div className="options-box">
                     <div className="section-header">
-                      <div>
+                    <div>
                         <h4>{field.type === 8 ? "Opcoes do radio" : "Opcoes da lista"}</h4>
-                        <p className="section-copy">{field.type === 8 ? "Cadastre as opcoes exibidas como selecao unica em botoes." : "Cada item pode ter nome e valor proprios."}</p>
+                        <p className="section-copy">{field.type === 8 ? "Cadastre as opcoes exibidas como selecao unica em botoes." : "Cada item pode ter nome e valor proprios. Esta estrutura e plana e nao aceita lista dentro de lista."}</p>
                       </div>
                       <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => updateField(editingStep, fieldIndex, { options: [...field.options, createOption()] })}>
                         <Plus size={14} />
@@ -837,7 +841,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                   <label>{currentStep.apiConfig?.scheduleMode === "interval" ? "Intervalo" : "Expressao cron"}</label>
                   <input className="input" placeholder={currentStep.apiConfig?.scheduleMode === "interval" ? "Ex.: 30 minutos" : "Ex.: */30 * * * *"} value={currentStep.apiConfig?.scheduleValue ?? ""} onChange={e => updateApiConfig(editingStep, { scheduleValue: e.target.value })} disabled={!isDraft} />
                   <div className="section-copy" style={{ marginTop: 8 }}>
-                    {scheduleHelperText(currentStep.apiConfig?.scheduleMode, currentStep.apiConfig?.scheduleValue)}
+                    {scheduleHelperText(currentStep.apiConfig?.scheduleMode, currentStep.apiConfig?.scheduleValue, currentStep.apiConfig?.scheduleAssist?.helperText)}
                   </div>
                 </div>}
               {currentStep.type === 5 &&
