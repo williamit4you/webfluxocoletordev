@@ -1,8 +1,8 @@
 "use client";
 
 import { api } from "@/lib/api";
-import type { Field, FieldOption, Flow, FlowToken, IntegrationTestResult, ResponseFieldMapping, Step, StepApiConfig } from "@/lib/types";
-import { Copy, Eye, EyeOff, PencilLine, Plus, Save, Send, Shield, Trash2, Workflow } from "lucide-react";
+import type { BodyFieldMapping, Field, FieldOption, Flow, FlowToken, IntegrationTestResult, ResponseFieldMapping, Step, StepApiConfig } from "@/lib/types";
+import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, PencilLine, Plus, Save, Send, Shield, Trash2, Workflow } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -51,7 +51,7 @@ function createField(): Field {
 }
 
 function createApiConfig(): StepApiConfig {
-  return { validateTls: true, method: "GET", scheduleMode: "manual", sendFieldKeys: [], responseMappings: [] };
+  return { validateTls: true, method: "GET", scheduleMode: "manual", sendFieldKeys: [], responseMappings: [], bodyMappings: [] };
 }
 
 function createStep(name = ""): Step {
@@ -67,6 +67,20 @@ function createStep(name = ""): Step {
 
 function createToken(): FlowToken {
   return { name: "", value: "", type: 0, headerName: "", active: true };
+}
+
+function createBodyMapping(): BodyFieldMapping {
+  return { targetKey: "", sourceReference: "" };
+}
+
+function normalizeBodyTargetKey(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w.]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/(^[_.]+|[_.]+$)/g, "")
+    .toLowerCase();
 }
 
 function typeNeedsApi(stepType: number) {
@@ -167,6 +181,17 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     ? `{\n${selectedSendFields.map(field => `  "${field.key}": "${field.variable}"`).join(",\n")}\n}`
     : "";
   const currentStepResponseMappings = currentStep?.apiConfig?.responseMappings ?? [];
+  const currentBodyMappings = currentStep?.apiConfig?.bodyMappings ?? [];
+  const orderedSelectedSendFields = selectedSendFieldKeys.length > 0
+    ? selectedSendFieldKeys
+      .map(key => availableIntegrationFields.find(field => field.key === key))
+      .filter((field): field is IntegrationFieldReference => !!field)
+    : availableIntegrationFields;
+  const customBodyPreview = currentBodyMappings.length > 0
+    ? `{\n${currentBodyMappings
+      .filter(mapping => mapping.targetKey.trim() || mapping.sourceReference.trim())
+      .map(mapping => `  "${mapping.targetKey || "campo"}": "${mapping.sourceReference || "{{variavel}}"}`).join(",\n")}\n}`
+    : "";
 
   function updateStep(index: number, patch: Partial<Step>) {
     setSteps(current => current.map((step, stepIndex) => stepIndex === index ? { ...step, ...patch } : step));
@@ -241,6 +266,35 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     updateApiConfig(editingStep, { sendFieldKeys: nextKeys });
   }
 
+  function selectAllSendFields() {
+    updateApiConfig(editingStep, { sendFieldKeys: availableIntegrationFields.map(field => field.key) });
+  }
+
+  function clearSendFields() {
+    updateApiConfig(editingStep, { sendFieldKeys: [] });
+  }
+
+  function moveSendField(fieldKey: string, direction: "up" | "down") {
+    const currentKeys = currentStep?.apiConfig?.sendFieldKeys ?? [];
+    if (currentKeys.length < 2) {
+      return;
+    }
+
+    const index = currentKeys.indexOf(fieldKey);
+    if (index < 0) {
+      return;
+    }
+
+    const nextIndex = direction === "up" ? index - 1 : index + 1;
+    if (nextIndex < 0 || nextIndex >= currentKeys.length) {
+      return;
+    }
+
+    const reordered = [...currentKeys];
+    [reordered[index], reordered[nextIndex]] = [reordered[nextIndex], reordered[index]];
+    updateApiConfig(editingStep, { sendFieldKeys: reordered });
+  }
+
   function insertReferenceIntoTestPayload(reference: IntegrationFieldReference) {
     let parsed: Record<string, string>;
 
@@ -274,6 +328,51 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
       .map(field => ({ fieldKey: field.key.trim(), responsePath: field.key.trim() }));
 
     updateApiConfig(editingStep, { responseMappings: nextMappings });
+  }
+
+  function updateBodyMapping(index: number, patch: Partial<BodyFieldMapping>) {
+    const nextMappings = currentBodyMappings.map((mapping, mappingIndex) => mappingIndex === index ? { ...mapping, ...patch } : mapping);
+    updateApiConfig(editingStep, { bodyMappings: nextMappings });
+  }
+
+  function addBodyMapping() {
+    updateApiConfig(editingStep, { bodyMappings: [...currentBodyMappings, createBodyMapping()] });
+  }
+
+  function removeBodyMapping(index: number) {
+    updateApiConfig(editingStep, { bodyMappings: currentBodyMappings.filter((_, mappingIndex) => mappingIndex !== index) });
+  }
+
+  function duplicateBodyMapping(index: number) {
+    const mapping = currentBodyMappings[index];
+    if (!mapping) {
+      return;
+    }
+
+    const duplicated = [...currentBodyMappings];
+    duplicated.splice(index + 1, 0, { ...mapping });
+    updateApiConfig(editingStep, { bodyMappings: duplicated });
+  }
+
+  function moveBodyMapping(index: number, direction: "up" | "down") {
+    const nextIndex = direction === "up" ? index - 1 : index + 1;
+    if (nextIndex < 0 || nextIndex >= currentBodyMappings.length) {
+      return;
+    }
+
+    const reordered = [...currentBodyMappings];
+    [reordered[index], reordered[nextIndex]] = [reordered[nextIndex], reordered[index]];
+    updateApiConfig(editingStep, { bodyMappings: reordered });
+  }
+
+  function buildBodyMappingsFromSelectedFields() {
+    const sourceFields = orderedSelectedSendFields.length > 0 ? orderedSelectedSendFields : availableIntegrationFields;
+    const nextMappings: BodyFieldMapping[] = sourceFields.map(field => ({
+      targetKey: field.key,
+      sourceReference: field.variable
+    }));
+
+    updateApiConfig(editingStep, { bodyMappings: nextMappings });
   }
 
   function addStep() {
@@ -729,6 +828,14 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
 
               {currentStep.type === 4 && availableIntegrationFields.length > 0 && <div className="notice" style={{ marginTop: 14 }}>
                 <strong>Campos enviados no body</strong>
+                <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={selectAllSendFields}>
+                    Selecionar todos
+                  </button>
+                  <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={clearSendFields}>
+                    Limpar selecao
+                  </button>
+                </div>
                 <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 10 }}>
                   {availableIntegrationFields.map(reference =>
                     <label key={`payload-${reference.stepIndex}-${reference.key}`} className="toggle-line compact" style={{ padding: "8px 12px", border: "1px solid #d7e3dc", borderRadius: 999, background: "#fff" }}>
@@ -744,11 +851,104 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                 <div className="section-copy" style={{ marginTop: 8 }}>
                   Se nenhum campo for marcado manualmente, o sistema envia todos os campos disponiveis ate esta etapa.
                 </div>
+                {selectedSendFieldKeys.length > 0 && <div style={{ marginTop: 14 }}>
+                  <strong>Ordem do payload</strong>
+                  <div className="builder" style={{ marginTop: 10 }}>
+                    {orderedSelectedSendFields.map((reference, index) =>
+                      <div className="field-block" key={`ordered-payload-${reference.key}`}>
+                        <div className="builder-row" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                          <span className="step-chip">{index + 1}</span>
+                          <div style={{ minWidth: 220 }}>
+                            <strong>{reference.label}</strong>
+                            <div className="section-copy" style={{ marginTop: 4 }}>{reference.variable}</div>
+                          </div>
+                          <button className="btn btn-ghost" type="button" disabled={!isDraft || index === 0} onClick={() => moveSendField(reference.key, "up")}>
+                            <ArrowUp size={15} />
+                            Subir
+                          </button>
+                          <button className="btn btn-ghost" type="button" disabled={!isDraft || index === orderedSelectedSendFields.length - 1} onClick={() => moveSendField(reference.key, "down")}>
+                            <ArrowDown size={15} />
+                            Descer
+                          </button>
+                        </div>
+                      </div>)}
+                  </div>
+                </div>}
               </div>}
 
               {currentStep.type === 4 && availableIntegrationFields.length > 0 && <div className="notice" style={{ marginTop: 14 }}>
                 <strong>API envio:</strong> esta etapa ja envia automaticamente no corpo JSON os dados capturados ate aqui, incluindo campos da etapa inicial como numero da nota fiscal.
                 <pre style={{ whiteSpace: "pre-wrap", marginTop: 10 }}>{payloadPreview}</pre>
+              </div>}
+
+              {currentStep.type === 4 && <div className="editor-block">
+                <div className="section-header">
+                  <div>
+                    <h4>Body customizado</h4>
+                    <p className="section-copy">Opcionalmente, monte o corpo com nomes de propriedades diferentes dos campos internos. Ex.: <code>numeroNota</code> recebe <code>{"{{notafiscal}}"}</code>.</p>
+                  </div>
+                  <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={addBodyMapping}>
+                    <Plus size={14} />
+                    Adicionar mapeamento
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                  <button className="btn btn-ghost" type="button" disabled={!isDraft || availableIntegrationFields.length === 0} onClick={buildBodyMappingsFromSelectedFields}>
+                    Gerar pelos campos selecionados
+                  </button>
+                </div>
+
+                {currentBodyMappings.length === 0 && <div className="empty compact">Sem body customizado. Nesse caso, o sistema usa os campos selecionados acima.</div>}
+
+                {currentBodyMappings.length > 0 && <div className="builder">
+                  {currentBodyMappings.map((mapping, mappingIndex) =>
+                    <div className="field-block" key={`body-mapping-${mappingIndex}`}>
+                      <div className="builder-row" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                        <input
+                          className="input"
+                          style={{ minWidth: 200 }}
+                          placeholder="nomePropriedade ou cliente.documento"
+                          value={mapping.targetKey}
+                          onChange={e => updateBodyMapping(mappingIndex, { targetKey: normalizeBodyTargetKey(e.target.value) })}
+                          disabled={!isDraft}
+                        />
+                        <select
+                          className="select"
+                          style={{ minWidth: 260 }}
+                          value={mapping.sourceReference}
+                          onChange={e => updateBodyMapping(mappingIndex, { sourceReference: e.target.value })}
+                          disabled={!isDraft}
+                        >
+                          <option value="">Selecione um campo</option>
+                          {availableIntegrationFields.map(reference => <option key={`body-source-${reference.key}`} value={reference.variable}>{reference.label} - {reference.variable}</option>)}
+                        </select>
+                        <button className="btn btn-ghost" type="button" disabled={!isDraft || mappingIndex === 0} onClick={() => moveBodyMapping(mappingIndex, "up")}>
+                          <ArrowUp size={15} />
+                          Subir
+                        </button>
+                        <button className="btn btn-ghost" type="button" disabled={!isDraft || mappingIndex === currentBodyMappings.length - 1} onClick={() => moveBodyMapping(mappingIndex, "down")}>
+                          <ArrowDown size={15} />
+                          Descer
+                        </button>
+                        <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => duplicateBodyMapping(mappingIndex)}>
+                          Duplicar
+                        </button>
+                        <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => removeBodyMapping(mappingIndex)}>
+                          <Trash2 size={15} />
+                          Remover
+                        </button>
+                      </div>
+                    </div>)}
+                </div>}
+
+                {currentBodyMappings.length > 0 && <div className="notice" style={{ marginTop: 14 }}>
+                  <strong>Preview do body customizado</strong>
+                  <pre style={{ whiteSpace: "pre-wrap", marginTop: 10 }}>{customBodyPreview}</pre>
+                  <div className="section-copy" style={{ marginTop: 8 }}>
+                    Dica: use ponto no nome da propriedade para criar objetos aninhados, como <code>cliente.documento</code> ou <code>nota.numero</code>.
+                  </div>
+                </div>}
               </div>}
 
               {currentStep.type === 5 && currentStep.fields.length > 0 && <div className="editor-block">
