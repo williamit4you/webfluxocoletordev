@@ -10,9 +10,10 @@ import { useEffect, useState } from "react";
 export default function FlowsPage() {
   const { user } = useAuth();
   const [flows, setFlows] = useState<Flow[]>([]);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    api<Flow[]>("/flows?scope=builder").then(setFlows);
+    api<Flow[]>("/flows?scope=builder").then(setFlows).catch(e => setError(e instanceof Error ? e.message : "Nao foi possivel carregar os fluxos."));
   }, []);
 
   return <>
@@ -24,6 +25,8 @@ export default function FlowsPage() {
       </div>
       {user?.role === "SuperAdmin" && <Link href="/fluxos/novo" className="btn btn-primary"><Plus size={17} />Criar fluxo</Link>}
     </div>
+
+    {error && <div className="error">{error}</div>}
 
     <div className="flow-grid">
       {flows.map(flow =>

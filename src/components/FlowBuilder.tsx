@@ -79,7 +79,7 @@ function buildAutoFieldKey(previousLabel: string, currentKey: string, nextLabel:
 
 function createOption(parentFieldType?: number): FieldOption {
   if (parentFieldType === 5) {
-    return { label: "", value: "", key: "", type: 0, mask: "", required: false, order: 1 };
+    return { label: "", value: "", key: "", type: null, mask: "", required: false, order: 1 };
   }
 
   return { label: "", value: "", order: 1 };
@@ -818,13 +818,14 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                           disabled={!isDraft}
                         />
                         <input className="input" placeholder="chave_do_campo" value={option.key ?? option.value ?? ""} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, { key: slugify(e.target.value), value: slugify(e.target.value) })} disabled={!isDraft} />
-                        <select className="select" value={option.type ?? 0} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, {
-                          type: Number(e.target.value),
-                          mask: fieldSupportsMask(Number(e.target.value)) ? option.mask ?? "" : ""
+                        <select className="select" value={option.type ?? ""} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, {
+                          type: e.target.value ? Number(e.target.value) : null,
+                          mask: e.target.value && fieldSupportsMask(Number(e.target.value)) ? option.mask ?? "" : ""
                         })} disabled={!isDraft}>
+                          <option value="">Tipo</option>
                           {listFieldTypeOptions.map(typeOption => <option key={typeOption.value} value={typeOption.value}>{typeOption.label}</option>)}
                         </select>
-                        <select className="select" value={option.mask ?? ""} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, { mask: e.target.value || "" })} disabled={!isDraft || !fieldSupportsMask(option.type ?? 0)}>
+                        <select className="select" value={option.mask ?? ""} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, { mask: e.target.value || "" })} disabled={!isDraft || !fieldSupportsMask(option.type ?? -1)}>
                           {maskOptions.map(maskOption => <option key={maskOption.value || "empty"} value={maskOption.value}>{maskOption.label}</option>)}
                         </select>
                         <label className="toggle-line compact">

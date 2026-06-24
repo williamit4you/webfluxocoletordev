@@ -14,12 +14,14 @@ export default function EntryPage() {
   const router = useRouter();
 
   useEffect(() => {
-    api<Flow[]>("/flows").then(result => {
-      setFlows(result);
-      if (result[0]) {
-        setFlowId(result[0].id);
-      }
-    });
+    api<Flow[]>("/flows")
+      .then(result => {
+        setFlows(result);
+        if (result[0]) {
+          setFlowId(result[0].id);
+        }
+      })
+      .catch(e => setWarning(e instanceof Error ? e.message : "Nao foi possivel carregar os fluxos."));
   }, []);
 
   const flow = flows.find(item => item.id === flowId);
