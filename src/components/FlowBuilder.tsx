@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@/lib/api";
-import type { BodyFieldMapping, Field, FieldOption, Flow, FlowToken, IntegrationTestResult, ResponseFieldMapping, Step, StepApiConfig } from "@/lib/types";
+import type { BodyFieldMapping, Field, FieldOption, Flow, FlowToken, IntegrationTestResult, ResponseFieldMapping, Step, StepApiConfig, User } from "@/lib/types";
 import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, PencilLine, Plus, Save, Send, Shield, Trash2, Workflow } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -170,6 +170,8 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
   const [description, setDescription] = useState("");
   const [active, setActive] = useState(true);
   const [tokens, setTokens] = useState<FlowToken[]>([]);
+  const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [steps, setSteps] = useState<Step[]>([
     { ...createStep("Entrada do caminhao"), type: 0 },
     { ...createStep("Saida"), type: 1 }
@@ -190,6 +192,26 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
   const [copiedReference, setCopiedReference] = useState("");
 
   useEffect(() => {
+    let activeRequest = true;
+
+    api<User[]>("/users")
+      .then(result => {
+        if (activeRequest) {
+          setUsers(result.filter(user => user.active !== false));
+        }
+      })
+      .catch(() => {
+        if (activeRequest) {
+          setUsers([]);
+        }
+      });
+
+    return () => {
+      activeRequest = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!flowId) {
       return;
     }
@@ -207,6 +229,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
         setDescription(flow.description);
         setActive(flow.active);
         setTokens(flow.tokens);
+        setAssignedUserIds(flow.assignedUserIds ?? []);
         setSteps(flow.steps.length > 0 ? flow.steps : [createStep()]);
         setEditingStep(0);
         setFlowStatus(flow.lifecycleStatus);
@@ -309,6 +332,12 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     setSteps(current => current.map((step, currentStepIndex) => currentStepIndex === stepIndex
       ? { ...step, apiConfig: { ...createApiConfig(), ...step.apiConfig, ...patch } }
       : step));
+  }
+
+  function toggleFlowUser(userId: string) {
+    setAssignedUserIds(current => current.includes(userId)
+      ? current.filter(id => id !== userId)
+      : [...current, userId]);
   }
 
   async function copyReference(reference: string) {
@@ -469,6 +498,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
       name,
       description,
       active,
+      assignedUserIds,
       tokens: tokens.map(token => ({
         ...token,
         name: token.name.trim(),
@@ -714,6 +744,24 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
         </div>
 
         {currentStep && <div className="step-editor card">
+          <div className="edit-panel">
+            <div className="section-header">
+              <div>
+                <h4>Usuarios do fluxo</h4>
+                <p className="section-copy">Quem estiver vinculado ao fluxo pode localizar e executar tarefas deste fluxo inteiro.</p>
+              </div>
+            </div>
+
+            {users.length === 0 && <div className="empty compact">Nenhum usuario disponivel para vincular.</div>}
+
+            {users.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {users.map(user => <label key={user.id} className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 999, background: assignedUserIds.includes(user.id) ? "#eef7f2" : "#fff" }}>
+                <input type="checkbox" checked={assignedUserIds.includes(user.id)} onChange={() => toggleFlowUser(user.id)} disabled={!isDraft} />
+                {user.name}
+              </label>)}
+            </div>}
+          </div>
+
           <div className="step-editor-header">
             <div>
               <span className="eyebrow">Etapa {editingStep + 1}</span>
@@ -731,6 +779,13 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
               <label>Tipo de entrada</label>
               <select className="select" value={currentStep.type} onChange={e => updateStep(editingStep, { type: Number(e.target.value), apiConfig: createApiConfig() })} disabled={!isDraft}>
                 {stepTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Responsavel da etapa</label>
+              <select className="select" value={currentStep.assignedUserId ?? ""} onChange={e => updateStep(editingStep, { assignedUserId: e.target.value || undefined })} disabled={!isDraft}>
+                <option value="">Qualquer usuario com acesso</option>
+                {users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
               </select>
             </div>
             <div className="field span2">

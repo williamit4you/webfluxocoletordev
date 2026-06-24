@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, FilePlus2, Gauge, LogOut, Menu, Play, Settings2, Users, Workflow } from "lucide-react";
+import { Activity, FilePlus2, Gauge, ListChecks, LogOut, Menu, Play, Settings2, Users, Workflow } from "lucide-react";
 import { useAuth } from "./Auth";
 
 const items = [
   { href: "/", label: "Visão geral", icon: Gauge },
   { href: "/entrada", label: "Nova entrada", icon: Play },
+  { href: "/tarefas", label: "Tarefas", icon: ListChecks },
   { href: "/fluxos", label: "Fluxos", icon: Workflow },
   { href: "/fluxos/novo", label: "Criar fluxo", icon: FilePlus2, roles: ["SuperAdmin"] },
   { href: "/usuarios", label: "Usuários", icon: Users, roles: ["SuperAdmin", "Admin"] },
