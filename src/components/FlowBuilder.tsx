@@ -99,6 +99,7 @@ function createStep(name = ""): Step {
     description: "",
     type: 1,
     order: 1,
+    assignedUserIds: [],
     fields: [],
     apiConfig: createApiConfig()
   };
@@ -172,6 +173,8 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
   const [tokens, setTokens] = useState<FlowToken[]>([]);
   const [assignedUserIds, setAssignedUserIds] = useState<string[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [flowUserFilter, setFlowUserFilter] = useState("");
+  const [stepUserFilter, setStepUserFilter] = useState("");
   const [steps, setSteps] = useState<Step[]>([
     { ...createStep("Entrada do caminhao"), type: 0 },
     { ...createStep("Saida"), type: 1 }
@@ -284,6 +287,8 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
       .filter(mapping => mapping.targetKey.trim() || mapping.sourceReference.trim())
       .map(mapping => `  "${mapping.targetKey || "campo"}": "${mapping.sourceReference || "{{variavel}}"}`).join(",\n")}\n}`
     : "";
+  const filteredFlowUsers = users.filter(user => user.name.toLowerCase().includes(flowUserFilter.toLowerCase()) || user.email.toLowerCase().includes(flowUserFilter.toLowerCase()));
+  const filteredStepUsers = users.filter(user => user.name.toLowerCase().includes(stepUserFilter.toLowerCase()) || user.email.toLowerCase().includes(stepUserFilter.toLowerCase()));
 
   function updateStep(index: number, patch: Partial<Step>) {
     setSteps(current => current.map((step, stepIndex) => stepIndex === index ? { ...step, ...patch } : step));
@@ -338,6 +343,15 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     setAssignedUserIds(current => current.includes(userId)
       ? current.filter(id => id !== userId)
       : [...current, userId]);
+  }
+
+  function toggleStepUser(userId: string) {
+    const currentUserIds = currentStep?.assignedUserIds ?? [];
+    updateStep(editingStep, {
+      assignedUserIds: currentUserIds.includes(userId)
+        ? currentUserIds.filter(id => id !== userId)
+        : [...currentUserIds, userId]
+    });
   }
 
   async function copyReference(reference: string) {
@@ -754,12 +768,16 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
 
             {users.length === 0 && <div className="empty compact">Nenhum usuario disponivel para vincular.</div>}
 
-            {users.length > 0 && <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-              {users.map(user => <label key={user.id} className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 999, background: assignedUserIds.includes(user.id) ? "#eef7f2" : "#fff" }}>
-                <input type="checkbox" checked={assignedUserIds.includes(user.id)} onChange={() => toggleFlowUser(user.id)} disabled={!isDraft} />
-                {user.name}
-              </label>)}
-            </div>}
+            {users.length > 0 && <>
+              <input className="input" placeholder="Buscar usuario no fluxo..." value={flowUserFilter} onChange={e => setFlowUserFilter(e.target.value)} disabled={!isDraft} />
+              <div style={{ marginTop: 12, maxHeight: 220, overflow: "auto", border: "1px solid var(--line)", borderRadius: 12, padding: 10, display: "grid", gap: 8 }}>
+                {filteredFlowUsers.map(user => <label key={user.id} className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: assignedUserIds.includes(user.id) ? "#eef7f2" : "#fff" }}>
+                  <input type="checkbox" checked={assignedUserIds.includes(user.id)} onChange={() => toggleFlowUser(user.id)} disabled={!isDraft} />
+                  {user.name} <small style={{ color: "var(--muted)" }}>{user.email}</small>
+                </label>)}
+                {filteredFlowUsers.length === 0 && <div className="empty compact">Nenhum usuario encontrado.</div>}
+              </div>
+            </>}
           </div>
 
           <div className="step-editor-header">
@@ -781,12 +799,20 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                 {stepTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
-            <div className="field">
-              <label>Responsavel da etapa</label>
-              <select className="select" value={currentStep.assignedUserId ?? ""} onChange={e => updateStep(editingStep, { assignedUserId: e.target.value || undefined })} disabled={!isDraft}>
-                <option value="">Qualquer usuario com acesso</option>
-                {users.map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
-              </select>
+            <div className="field span2">
+              <label>Usuarios da etapa</label>
+              <input className="input" placeholder="Buscar usuario na etapa..." value={stepUserFilter} onChange={e => setStepUserFilter(e.target.value)} disabled={!isDraft} />
+              <div style={{ maxHeight: 220, overflow: "auto", border: "1px solid var(--line)", borderRadius: 12, padding: 10, display: "grid", gap: 8 }}>
+                <label className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: currentStep.assignedUserIds.length === 0 ? "#eef7f2" : "#fff" }}>
+                  <input type="checkbox" checked={currentStep.assignedUserIds.length === 0} onChange={() => updateStep(editingStep, { assignedUserIds: [] })} disabled={!isDraft} />
+                  Qualquer usuario com acesso ao fluxo
+                </label>
+                {filteredStepUsers.map(user => <label key={user.id} className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: currentStep.assignedUserIds.includes(user.id) ? "#eef7f2" : "#fff" }}>
+                  <input type="checkbox" checked={currentStep.assignedUserIds.includes(user.id)} onChange={() => toggleStepUser(user.id)} disabled={!isDraft} />
+                  {user.name} <small style={{ color: "var(--muted)" }}>{user.email}</small>
+                </label>)}
+                {filteredStepUsers.length === 0 && <div className="empty compact">Nenhum usuario encontrado.</div>}
+              </div>
             </div>
             <div className="field span2">
               <label>Descricao</label>

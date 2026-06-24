@@ -60,9 +60,19 @@ function applyMask(mask: string | null | undefined, value: string) {
           [a, b && `.${b}`, c && `.${c}`, d && `/${d}`, e && `-${e}`].filter(Boolean).join(""));
     case "telefone":
     case "celular": {
-      const limited = digits.slice(0, mask === "celular" ? 11 : 10);
-      return limited.replace(/^(\d{0,2})(\d{0,5})(\d{0,4}).*$/, (_, a, b, c) =>
-        [a && `(${a}`, a?.length === 2 && ") ", b, c && `-${c}`].filter(Boolean).join(""));
+      const limited = digits.slice(0, mask === "celular" ? 11 : 11);
+      if (limited.startsWith("0")) {
+        return limited.replace(/^(\d{0,3})(\d{0,5})(\d{0,4}).*$/, (_, a, b, c) =>
+          [a && `(${a})`, b && ` ${b}`, c && `-${c}`].filter(Boolean).join(""));
+      }
+
+      if (mask === "celular") {
+        return limited.replace(/^(\d{0,2})(\d{0,5})(\d{0,4}).*$/, (_, a, b, c) =>
+          [a && `(${a})`, b && ` ${b}`, c && `-${c}`].filter(Boolean).join(""));
+      }
+
+      return limited.replace(/^(\d{0,2})(\d{0,4})(\d{0,4}).*$/, (_, a, b, c) =>
+        [a && `(${a})`, b && ` ${b}`, c && `-${c}`].filter(Boolean).join(""));
     }
     case "valor":
       return formatCurrency(normalized);
@@ -200,21 +210,30 @@ function formatBytes(size: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function buildCurrentStepFormData(result: Instance) {
+  const currentStep = result.steps.find(step => step.id === result.currentStepExecutionId) ?? result.steps.find(step => step.status === 1);
+  if (!currentStep) {
+    return { currentStep: undefined, formData: {} as Record<string, unknown> };
+  }
+
+  const formData = currentStep.fields.reduce<Record<string, unknown>>((accumulator, field) => {
+    accumulator[field.key] = currentStep.data[field.key] ?? field.value ?? (isUploadField(field.type) ? [] : isStructuredListField(field) ? [] : "");
+    return accumulator;
+  }, {});
+
+  return { currentStep, formData };
+}
+
 function syncCurrentStepState(result: Instance, setItem: (value: Instance) => void, setFormData: (value: Record<string, unknown>) => void, setNotes: (value: string) => void) {
   setItem(result);
-  const currentStep = result.steps.find(step => step.id === result.currentStepExecutionId) ?? result.steps.find(step => step.status === 1);
+  const { currentStep, formData } = buildCurrentStepFormData(result);
   if (!currentStep) {
     setFormData({});
     setNotes("");
     return;
   }
 
-  const nextFormData = currentStep.fields.reduce<Record<string, unknown>>((accumulator, field) => {
-    accumulator[field.key] = currentStep.data[field.key] ?? field.value ?? (isUploadField(field.type) ? [] : isStructuredListField(field) ? [] : "");
-    return accumulator;
-  }, {});
-
-  setFormData(nextFormData);
+  setFormData(formData);
   setNotes(currentStep.notes ?? "");
 }
 
@@ -550,7 +569,16 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       body.append("fieldKey", fieldKey);
       body.append("file", file);
       const result = await api<Instance>(`/instances/${id}/upload`, { method: "POST", body });
-      syncCurrentStepState(result, setItem, setFormData, setNotes);
+      setItem(result);
+      const { currentStep: nextStep, formData: nextServerData } = buildCurrentStepFormData(result);
+      setFormData(current => {
+        if (!nextStep) {
+          return {};
+        }
+
+        return { ...current, ...nextServerData, [fieldKey]: nextServerData[fieldKey] ?? current[fieldKey] ?? [] };
+      });
+      setNotes(nextStep?.notes ?? "");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Nao foi possivel enviar o arquivo.");
     } finally {
@@ -631,6 +659,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
         <section className="card">
           <div style={{ padding: "24px 24px 0" }}>
             <h2 className="section-title">Execucao da etapa atual</h2>
+            {currentStep && <h1 style={{ fontSize: 36, lineHeight: 1.05, margin: "8px 0 10px", letterSpacing: "-0.04em" }}>{currentStep.name}</h1>}
             <p className="section-copy">
               {currentStep ? `Preencha os campos e conclua a etapa "${currentStep.name}".` : "Nenhuma etapa manual ativa no momento."}
             </p>
