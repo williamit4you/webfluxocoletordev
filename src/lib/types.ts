@@ -1,7 +1,7 @@
 export type User={id:string;name:string;email:string;role:string;active?:boolean};
 export type MinioBucket={id?:string|null;name:string;bucketName:string;description?:string|null;active:boolean;isDefault:boolean};
 export type MinioConfiguration={id?:string|null;endpoint:string;accessKey:string;secretKey:string;publicUrl:string;active:boolean;buckets:MinioBucket[]};
-export type FieldOption={id?:string;label:string;value:string;order:number};
+export type FieldOption={id?:string;label:string;value:string;order:number;key?:string|null;type?:number|null;mask?:string|null;required?:boolean|null};
 export type Field={id?:string;key:string;label:string;type:number;mask?:string|null;required:boolean;order:number;options:FieldOption[]};
 export type ExecutionField={id?:string;key:string;label:string;type:number;mask?:string|null;required:boolean;order:number;options:FieldOption[];value?:string|null};
 export type FlowToken={id?:string;name:string;value?:string;type:number;headerName?:string;active:boolean};

@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import type { ExecutionField, Instance } from "@/lib/types";
 import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Paperclip, Play, Save } from "lucide-react";
 import Link from "next/link";
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 
 type UploadAsset = {
   id: string;
@@ -23,6 +23,67 @@ function isUploadField(type: number) {
 
 function toText(value: unknown) {
   return typeof value === "string" ? value : value == null ? "" : String(value);
+}
+
+function buildReaderCode(currentStep: Instance["steps"][number] | undefined, formData: Record<string, unknown>) {
+  if (!currentStep) {
+    return "";
+  }
+
+  for (const key of ["chaveAcesso", "numeroNfe", "codigo", "code"]) {
+    const value = toText(formData[key]).trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function isStructuredListField(field: ExecutionField) {
+  return field.type === 5 && field.options.some(option => option.key?.trim() && option.type !== undefined && option.type !== null);
+}
+
+function parseStructuredRows(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as Array<Record<string, unknown>>;
+  }
+
+  return value
+    .map(item => item && typeof item === "object" && !Array.isArray(item) ? item as Record<string, unknown> : null)
+    .filter((item): item is Record<string, unknown> => !!item);
+}
+
+function rowHasContent(row: Record<string, unknown>, field: ExecutionField) {
+  return field.options.some(option => {
+    const key = option.key?.trim();
+    return key ? toText(row[key]).trim() : false;
+  });
+}
+
+function sanitizeStructuredListValue(field: ExecutionField, value: unknown) {
+  const rows = parseStructuredRows(value);
+  return rows
+    .map(row => Object.fromEntries(
+      field.options
+        .map(option => option.key?.trim())
+        .filter((key): key is string => !!key)
+        .map(key => [key, toText(row[key]).trim()])
+    ))
+    .filter(row => rowHasContent(row, field));
+}
+
+function sanitizeStepPayload(currentStep: Instance["steps"][number] | undefined, formData: Record<string, unknown>) {
+  if (!currentStep) {
+    return formData;
+  }
+
+  return Object.fromEntries(currentStep.fields.map(field => [
+    field.key,
+    isStructuredListField(field)
+      ? sanitizeStructuredListValue(field, formData[field.key])
+      : formData[field.key]
+  ]));
 }
 
 function parseUploadAssets(value: unknown): UploadAsset[] {
@@ -166,6 +227,83 @@ function renderFieldInput(
   onUpload: (fieldKey: string, file?: File | null) => Promise<void>,
   uploading: boolean
 ) {
+  if (isStructuredListField(field)) {
+    const rows = parseStructuredRows(value);
+
+    function updateRow(rowIndex: number, key: string, nextValue: unknown) {
+      const nextRows = rows.map((row, currentIndex) => currentIndex === rowIndex ? { ...row, [key]: nextValue } : row);
+      onChange(nextRows);
+    }
+
+    function addRow() {
+      const nextRow = Object.fromEntries(
+        field.options
+          .map(option => option.key?.trim())
+          .filter((key): key is string => !!key)
+          .map(key => [key, ""])
+      );
+
+      onChange([...rows, nextRow]);
+    }
+
+    function removeRow(rowIndex: number) {
+      onChange(rows.filter((_, currentIndex) => currentIndex !== rowIndex));
+    }
+
+    return (
+      <div style={{ display: "grid", gap: 12 }}>
+        {rows.length === 0 && <div className="section-copy">Nenhum item adicionado.</div>}
+
+        {rows.map((row, rowIndex) => (
+          <div key={`${field.key}-row-${rowIndex}`} style={{ border: "1px solid var(--line)", borderRadius: 16, padding: 14, display: "grid", gap: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <strong>Item {rowIndex + 1}</strong>
+              <button className="btn btn-ghost" type="button" onClick={() => removeRow(rowIndex)}>Remover</button>
+            </div>
+
+            <div className="formgrid">
+              {field.options.map(option => {
+                const key = option.key?.trim();
+                if (!key || option.type === undefined || option.type === null) {
+                  return null;
+                }
+
+                const nestedField: ExecutionField = {
+                  id: option.id,
+                  key,
+                  label: option.label,
+                  type: option.type,
+                  mask: option.mask ?? "",
+                  required: option.required ?? false,
+                  order: option.order,
+                  options: [],
+                  value: typeof row[key] === "string" ? row[key] : null
+                };
+
+                return (
+                  <div className="field" key={`${field.key}-${key}-${rowIndex}`}>
+                    <label>{option.label}{option.required ? " *" : ""}</label>
+                    {renderFieldInput(
+                      nestedField,
+                      row[key] ?? "",
+                      next => updateRow(rowIndex, key, next),
+                      onUpload,
+                      uploading
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+        <div>
+          <button className="btn btn-secondary" type="button" onClick={addRow}>Adicionar item</button>
+        </div>
+      </div>
+    );
+  }
+
   if (field.type === 5) {
     return (
       <select className="select" value={toText(value)} onChange={event => onChange(event.target.value)}>
@@ -221,6 +359,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const [advancing, setAdvancing] = useState(false);
   const [uploadingFieldKey, setUploadingFieldKey] = useState("");
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
+  const [readerWarning, setReaderWarning] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const video = useRef<HTMLVideoElement>(null);
 
   const load = () => api<Instance>(`/instances/${id}`)
     .then(result => syncCurrentStepState(result, setItem, setFormData, setNotes))
@@ -234,6 +375,82 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     () => item?.steps.find(step => step.id === item.currentStepExecutionId) ?? item?.steps.find(step => step.status === 1),
     [item]
   );
+  const readerMode = currentStep?.type === 0;
+
+  function applyReaderData(nextData: Record<string, unknown>) {
+    setFormData(current => ({ ...current, ...nextData }));
+  }
+
+  async function readPdf(file?: File) {
+    if (!file) {
+      return;
+    }
+
+    setReaderWarning("");
+
+    const body = new FormData();
+    body.append("file", file);
+
+    try {
+      const result = await api<{ fields: Record<string, string>; warnings: string[] }>("/documents/nfe/extract", { method: "POST", body });
+      applyReaderData(result.fields);
+      setReaderWarning(result.warnings.join(" "));
+    } catch (e) {
+      setReaderWarning(e instanceof Error ? e.message : "Falha na leitura.");
+    }
+  }
+
+  async function scanCode() {
+    setReaderWarning("");
+    if (!navigator.mediaDevices) {
+      setReaderWarning("Camera indisponivel. Use o coletor como teclado nos campos da etapa.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      setScanning(true);
+
+      setTimeout(() => {
+        if (video.current) {
+          video.current.srcObject = stream;
+          void video.current.play();
+        }
+      }, 0);
+
+      const Detector = (window as unknown as {
+        BarcodeDetector?: new (args: { formats: string[] }) => { detect: (video: HTMLVideoElement) => Promise<{ rawValue: string }[]> };
+      }).BarcodeDetector;
+
+      if (!Detector) {
+        setReaderWarning("Este navegador nao oferece leitura nativa. Use o coletor fisico ou preencha manualmente.");
+        return;
+      }
+
+      const detector = new Detector({ formats: ["qr_code", "code_128", "ean_13", "data_matrix"] });
+      const loop = async () => {
+        if (!video.current) {
+          return;
+        }
+
+        const codes = await detector.detect(video.current);
+        if (codes[0]) {
+          applyReaderData({ chaveAcesso: codes[0].rawValue });
+          stream.getTracks().forEach(track => track.stop());
+          setScanning(false);
+          return;
+        }
+
+        if (stream.active) {
+          requestAnimationFrame(loop);
+        }
+      };
+
+      setTimeout(() => void loop(), 700);
+    } catch {
+      setReaderWarning("Nao foi possivel abrir a camera. Verifique a permissao e use HTTPS ou localhost.");
+    }
+  }
 
   async function uploadFile(fieldKey: string, file?: File | null) {
     if (!file) {
@@ -319,7 +536,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       <div className="pagehead">
         <div>
           <span className="eyebrow">{item.flowName}</span>
-          <h1 className="title">{item.code}</h1>
+          <h1 className="title">{buildReaderCode(currentStep, formData) || item.code}</h1>
           <p className="subtitle">Criado em {new Date(item.createdAt).toLocaleString("pt-BR")}</p>
         </div>
         <span className={`badge ${item.status === 0 ? "inprogress" : "completed"}`}>{item.status === 0 ? "Em andamento" : "Concluído"}</span>
@@ -415,6 +632,28 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
           {currentStep && !currentStep.isAutomatic && (
             <div className="formgrid" style={{ padding: 24 }}>
+              {readerMode && (
+                <div className="field span2">
+                  <div className="scanbox">
+                    <strong>Entrada assistida</strong>
+                    <p className="section-copy">Leia um DANFE digital ou capture o codigo pela camera para preencher a etapa atual.</p>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <label className="btn btn-secondary">
+                        <Paperclip size={16} />
+                        Ler PDF
+                        <input hidden type="file" accept="application/pdf" onChange={event => void readPdf(event.target.files?.[0])} />
+                      </label>
+                      <button className="btn btn-secondary" type="button" onClick={scanCode}>
+                        <Camera size={16} />
+                        Abrir camera
+                      </button>
+                    </div>
+                    {scanning && <video ref={video} className="camera" muted playsInline />}
+                    {readerWarning && <div className="notice" style={{ marginTop: 12 }}>{readerWarning}</div>}
+                  </div>
+                </div>
+              )}
+
               {currentStep.fields.map(field => (
                 <div className="field" key={`${currentStep.id}-${field.key}`}>
                   <label>{field.label}{field.required ? " *" : ""}</label>
