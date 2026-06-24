@@ -45,12 +45,17 @@ const intervalPresets = [
   { label: "5 minutos", value: "5 minutos" },
   { label: "15 minutos", value: "15 minutos" },
   { label: "30 minutos", value: "30 minutos" },
-  { label: "1 hora", value: "60 minutos" }
+  { label: "1 hora", value: "60 minutos" },
+  { label: "1 dia", value: "1440 minutos" },
+  { label: "1 semana", value: "10080 minutos" }
 ];
 
 const cronPresets = [
-  { label: "A cada 30 min", value: "*/30 * * * *" },
   { label: "Todo dia 08:00", value: "0 8 * * *" },
+  { label: "1x por hora", value: "0 * * * *" },
+  { label: "1x por semana", value: "0 8 * * 1" },
+  { label: "1x por mes", value: "0 8 1 * *" },
+  { label: "A cada 30 min", value: "*/30 * * * *" },
   { label: "Todo dia 12:00", value: "0 12 * * *" },
   { label: "Todo dia 18:00", value: "0 18 * * *" }
 ];
@@ -129,20 +134,26 @@ function fieldSupportsMask(fieldType: number) {
   return fieldType !== 5 && fieldType !== 6 && fieldType !== 8 && fieldType !== 3 && fieldType !== 7;
 }
 
-function scheduleHelperText(scheduleMode?: string, scheduleValue?: string, helperText?: string | null) {
+function scheduleHelperText(scheduleMode?: string, scheduleValue?: string, helperText?: string | null, stepType?: number) {
   if (helperText) {
     return helperText;
   }
 
   if (scheduleMode === "interval" && scheduleValue) {
-    return `A consulta tentara executar em intervalo de ${scheduleValue}.`;
+    return stepType === 3
+      ? `Novas execucoes do fluxo serao iniciadas em intervalo de ${scheduleValue}.`
+      : `A consulta tentara executar em intervalo de ${scheduleValue}.`;
   }
 
   if (scheduleMode === "cron" && scheduleValue) {
-    return `Expressao cron configurada: ${scheduleValue}.`;
+    return stepType === 3
+      ? `Novas execucoes do fluxo seguirao a agenda cron ${scheduleValue}.`
+      : `Expressao cron configurada: ${scheduleValue}.`;
   }
 
-  return "Use os atalhos abaixo para preencher mais rapido e reduzir erros.";
+  return stepType === 3
+    ? "Defina quando o fluxo deve iniciar automaticamente."
+    : "Use os atalhos abaixo para preencher mais rapido e reduzir erros.";
 }
 
 type IntegrationFieldReference = {
@@ -829,6 +840,45 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
             </div>
           </div>
 
+          {currentStep.type === 3 && <div className="editor-block">
+            <div className="section-header">
+              <div>
+                <h4>Agendamento de inicio</h4>
+                <p className="section-copy">Configure quando novas execucoes deste fluxo devem ser iniciadas automaticamente.</p>
+              </div>
+            </div>
+
+            <div className="formgrid">
+              <div className="field">
+                <label>Agendamento</label>
+                <select className="select" value={currentStep.apiConfig?.scheduleMode ?? "manual"} onChange={e => updateApiConfig(editingStep, { scheduleMode: e.target.value })} disabled={!isDraft}>
+                  <option value="manual">Manual</option>
+                  <option value="interval">Intervalo</option>
+                  <option value="cron">Cron</option>
+                </select>
+              </div>
+
+              {(currentStep.apiConfig?.scheduleMode === "interval" || currentStep.apiConfig?.scheduleMode === "cron") && <div className="field span2">
+                <label>Atalhos de preenchimento</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {(currentStep.apiConfig?.scheduleMode === "interval" ? intervalPresets : cronPresets).map(preset =>
+                    <button key={preset.value} className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateApiConfig(editingStep, { scheduleValue: preset.value })}>
+                      {preset.label}
+                    </button>)}
+                </div>
+              </div>}
+
+              {(currentStep.apiConfig?.scheduleMode === "interval" || currentStep.apiConfig?.scheduleMode === "cron") &&
+                <div className="field span2">
+                  <label>{currentStep.apiConfig?.scheduleMode === "interval" ? "Intervalo" : "Expressao cron"}</label>
+                  <input className="input" placeholder={currentStep.apiConfig?.scheduleMode === "interval" ? "Ex.: 60 minutos" : "Ex.: 0 8 * * *"} value={currentStep.apiConfig?.scheduleValue ?? ""} onChange={e => updateApiConfig(editingStep, { scheduleValue: e.target.value })} disabled={!isDraft} />
+                  <div className="section-copy" style={{ marginTop: 8 }}>
+                    {scheduleHelperText(currentStep.apiConfig?.scheduleMode, currentStep.apiConfig?.scheduleValue, currentStep.apiConfig?.scheduleAssist?.helperText, currentStep.type)}
+                  </div>
+                </div>}
+            </div>
+          </div>}
+
           {typeNeedsApi(currentStep.type) && <div className="editor-block">
             <div className="section-header">
               <div>
@@ -881,7 +931,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                   <label>{currentStep.apiConfig?.scheduleMode === "interval" ? "Intervalo" : "Expressao cron"}</label>
                   <input className="input" placeholder={currentStep.apiConfig?.scheduleMode === "interval" ? "Ex.: 30 minutos" : "Ex.: */30 * * * *"} value={currentStep.apiConfig?.scheduleValue ?? ""} onChange={e => updateApiConfig(editingStep, { scheduleValue: e.target.value })} disabled={!isDraft} />
                   <div className="section-copy" style={{ marginTop: 8 }}>
-                    {scheduleHelperText(currentStep.apiConfig?.scheduleMode, currentStep.apiConfig?.scheduleValue, currentStep.apiConfig?.scheduleAssist?.helperText)}
+                    {scheduleHelperText(currentStep.apiConfig?.scheduleMode, currentStep.apiConfig?.scheduleValue, currentStep.apiConfig?.scheduleAssist?.helperText, currentStep.type)}
                   </div>
                 </div>}
               {currentStep.type === 5 &&

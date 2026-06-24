@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@/lib/api";
-import type { ExecutionField, Instance } from "@/lib/types";
+import type { ExecutionField, FieldOption, Instance } from "@/lib/types";
 import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Paperclip, Play, Save } from "lucide-react";
 import Link from "next/link";
 import { use, useEffect, useMemo, useRef, useState } from "react";
@@ -23,21 +23,6 @@ function isUploadField(type: number) {
 
 function toText(value: unknown) {
   return typeof value === "string" ? value : value == null ? "" : String(value);
-}
-
-function buildReaderCode(currentStep: Instance["steps"][number] | undefined, formData: Record<string, unknown>) {
-  if (!currentStep) {
-    return "";
-  }
-
-  for (const key of ["chaveAcesso", "numeroNfe", "codigo", "code"]) {
-    const value = toText(formData[key]).trim();
-    if (value) {
-      return value;
-    }
-  }
-
-  return "";
 }
 
 function isStructuredListField(field: ExecutionField) {
@@ -63,6 +48,7 @@ function rowHasContent(row: Record<string, unknown>, field: ExecutionField) {
 
 function sanitizeStructuredListValue(field: ExecutionField, value: unknown) {
   const rows = parseStructuredRows(value);
+
   return rows
     .map(row => Object.fromEntries(
       field.options
@@ -84,6 +70,21 @@ function sanitizeStepPayload(currentStep: Instance["steps"][number] | undefined,
       ? sanitizeStructuredListValue(field, formData[field.key])
       : formData[field.key]
   ]));
+}
+
+function buildReaderCode(currentStep: Instance["steps"][number] | undefined, formData: Record<string, unknown>) {
+  if (!currentStep) {
+    return "";
+  }
+
+  for (const key of ["chaveAcesso", "numeroNfe", "codigo", "code"]) {
+    const value = toText(formData[key]).trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
 }
 
 function parseUploadAssets(value: unknown): UploadAsset[] {
@@ -152,7 +153,7 @@ function syncCurrentStepState(result: Instance, setItem: (value: Instance) => vo
   }
 
   const nextFormData = currentStep.fields.reduce<Record<string, unknown>>((accumulator, field) => {
-    accumulator[field.key] = currentStep.data[field.key] ?? field.value ?? (isUploadField(field.type) ? [] : "");
+    accumulator[field.key] = currentStep.data[field.key] ?? field.value ?? (isUploadField(field.type) ? [] : isStructuredListField(field) ? [] : "");
     return accumulator;
   }, {});
 
@@ -205,7 +206,7 @@ function renderUploadField(
         <div className="data-list">
           {assets.map(asset => (
             <div className="data-item" key={asset.id}>
-              <small>{asset.isPhoto ? "Foto" : "Anexo"} • {formatBytes(asset.size)}</small>
+              <small>{asset.isPhoto ? "Foto" : "Anexo"} | {formatBytes(asset.size)}</small>
               <strong>{asset.fileName}</strong>
               <div className="section-copy" style={{ marginTop: 4 }}>
                 <a href={buildAssetUrl(asset.url)} target="_blank" rel="noreferrer">{asset.isPhoto ? "Abrir foto" : "Abrir anexo"}</a>
@@ -220,6 +221,90 @@ function renderUploadField(
   );
 }
 
+function renderStructuredCellInput(option: FieldOption, value: unknown, onChange: (next: unknown) => void) {
+  const fieldType = option.type ?? 0;
+
+  if (fieldType === 6) {
+    return (
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <label className="toggle-line compact">
+          <input type="radio" name={option.key ?? option.label} checked={toText(value) === "true"} onChange={() => onChange("true")} />
+          Sim
+        </label>
+        <label className="toggle-line compact">
+          <input type="radio" name={option.key ?? option.label} checked={toText(value) === "false"} onChange={() => onChange("false")} />
+          Nao
+        </label>
+      </div>
+    );
+  }
+
+  const inputType = fieldType === 1 ? "number" : fieldType === 2 ? "date" : fieldType === 4 ? "email" : "text";
+  return <input className="input" type={inputType} value={toText(value)} onChange={event => onChange(event.target.value)} />;
+}
+
+function renderStructuredListField(
+  field: ExecutionField,
+  value: unknown,
+  onChange: (next: unknown) => void
+) {
+  const rows = parseStructuredRows(value);
+
+  function addRow() {
+    const nextRow = Object.fromEntries(
+      field.options
+        .map(option => option.key?.trim())
+        .filter((key): key is string => !!key)
+        .map(key => [key, ""])
+    );
+
+    onChange([...rows, nextRow]);
+  }
+
+  function updateRow(rowIndex: number, key: string, nextValue: unknown) {
+    onChange(rows.map((row, currentIndex) => currentIndex === rowIndex ? { ...row, [key]: nextValue } : row));
+  }
+
+  function removeRow(rowIndex: number) {
+    onChange(rows.filter((_, currentIndex) => currentIndex !== rowIndex));
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      {rows.length === 0 && <div className="section-copy">Nenhum item adicionado.</div>}
+
+      {rows.map((row, rowIndex) => (
+        <div key={`${field.key}-row-${rowIndex}`} style={{ border: "1px solid var(--line)", borderRadius: 16, padding: 14, display: "grid", gap: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <strong>Item {rowIndex + 1}</strong>
+            <button className="btn btn-ghost" type="button" onClick={() => removeRow(rowIndex)}>Remover</button>
+          </div>
+
+          <div className="formgrid">
+            {field.options.map(option => {
+              const key = option.key?.trim();
+              if (!key || option.type === undefined || option.type === null) {
+                return null;
+              }
+
+              return (
+                <div className="field" key={`${field.key}-${key}-${rowIndex}`}>
+                  <label>{option.label}{option.required ? " *" : ""}</label>
+                  {renderStructuredCellInput(option, row[key] ?? "", next => updateRow(rowIndex, key, next))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      <div>
+        <button className="btn btn-secondary" type="button" onClick={addRow}>Adicionar item</button>
+      </div>
+    </div>
+  );
+}
+
 function renderFieldInput(
   field: ExecutionField,
   value: unknown,
@@ -228,80 +313,7 @@ function renderFieldInput(
   uploading: boolean
 ) {
   if (isStructuredListField(field)) {
-    const rows = parseStructuredRows(value);
-
-    function updateRow(rowIndex: number, key: string, nextValue: unknown) {
-      const nextRows = rows.map((row, currentIndex) => currentIndex === rowIndex ? { ...row, [key]: nextValue } : row);
-      onChange(nextRows);
-    }
-
-    function addRow() {
-      const nextRow = Object.fromEntries(
-        field.options
-          .map(option => option.key?.trim())
-          .filter((key): key is string => !!key)
-          .map(key => [key, ""])
-      );
-
-      onChange([...rows, nextRow]);
-    }
-
-    function removeRow(rowIndex: number) {
-      onChange(rows.filter((_, currentIndex) => currentIndex !== rowIndex));
-    }
-
-    return (
-      <div style={{ display: "grid", gap: 12 }}>
-        {rows.length === 0 && <div className="section-copy">Nenhum item adicionado.</div>}
-
-        {rows.map((row, rowIndex) => (
-          <div key={`${field.key}-row-${rowIndex}`} style={{ border: "1px solid var(--line)", borderRadius: 16, padding: 14, display: "grid", gap: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-              <strong>Item {rowIndex + 1}</strong>
-              <button className="btn btn-ghost" type="button" onClick={() => removeRow(rowIndex)}>Remover</button>
-            </div>
-
-            <div className="formgrid">
-              {field.options.map(option => {
-                const key = option.key?.trim();
-                if (!key || option.type === undefined || option.type === null) {
-                  return null;
-                }
-
-                const nestedField: ExecutionField = {
-                  id: option.id,
-                  key,
-                  label: option.label,
-                  type: option.type,
-                  mask: option.mask ?? "",
-                  required: option.required ?? false,
-                  order: option.order,
-                  options: [],
-                  value: typeof row[key] === "string" ? row[key] : null
-                };
-
-                return (
-                  <div className="field" key={`${field.key}-${key}-${rowIndex}`}>
-                    <label>{option.label}{option.required ? " *" : ""}</label>
-                    {renderFieldInput(
-                      nestedField,
-                      row[key] ?? "",
-                      next => updateRow(rowIndex, key, next),
-                      onUpload,
-                      uploading
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-
-        <div>
-          <button className="btn btn-secondary" type="button" onClick={addRow}>Adicionar item</button>
-        </div>
-      </div>
-    );
+    return renderStructuredListField(field, value, onChange);
   }
 
   if (field.type === 5) {
@@ -322,7 +334,7 @@ function renderFieldInput(
         </label>
         <label className="toggle-line compact">
           <input type="radio" name={field.key} checked={toText(value) === "false"} onChange={() => onChange("false")} />
-          Não
+          Nao
         </label>
       </div>
     );
@@ -467,7 +479,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       const result = await api<Instance>(`/instances/${id}/upload`, { method: "POST", body });
       syncCurrentStepState(result, setItem, setFormData, setNotes);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Não foi possível enviar o arquivo.");
+      setError(e instanceof Error ? e.message : "Nao foi possivel enviar o arquivo.");
     } finally {
       setUploadingFieldKey("");
     }
@@ -486,12 +498,12 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
         method: "POST",
         body: JSON.stringify({
           notes,
-          data: formData
+          data: sanitizeStepPayload(currentStep, formData)
         })
       });
       syncCurrentStepState(result, setItem, setFormData, setNotes);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Não foi possível salvar a etapa.");
+      setError(e instanceof Error ? e.message : "Nao foi possivel salvar a etapa.");
     } finally {
       setSaving(false);
     }
@@ -510,12 +522,12 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
         method: "POST",
         body: JSON.stringify({
           notes,
-          data: formData
+          data: sanitizeStepPayload(currentStep, formData)
         })
       });
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Não foi possível concluir a etapa.");
+      setError(e instanceof Error ? e.message : "Nao foi possivel concluir a etapa.");
     } finally {
       setAdvancing(false);
     }
@@ -526,7 +538,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   }
 
   if (!item) {
-    return <div className="empty">Carregando execução...</div>;
+    return <div className="empty">Carregando execucao...</div>;
   }
 
   return (
@@ -539,7 +551,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           <h1 className="title">{buildReaderCode(currentStep, formData) || item.code}</h1>
           <p className="subtitle">Criado em {new Date(item.createdAt).toLocaleString("pt-BR")}</p>
         </div>
-        <span className={`badge ${item.status === 0 ? "inprogress" : "completed"}`}>{item.status === 0 ? "Em andamento" : "Concluído"}</span>
+        <span className={`badge ${item.status === 0 ? "inprogress" : "completed"}`}>{item.status === 0 ? "Em andamento" : "Concluido"}</span>
       </div>
 
       <div className="detailgrid">
@@ -556,16 +568,16 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                   <div style={{ flex: 1 }}>
                     <strong>{step.name}</strong>
                     <div className="section-copy" style={{ marginTop: 4 }}>
-                      {step.status === 2 ? `Concluída ${step.completedAt ? new Date(step.completedAt).toLocaleString("pt-BR") : ""}` : step.status === 1 ? "Etapa atual" : "Aguardando"}
+                      {step.status === 2 ? `Concluida ${step.completedAt ? new Date(step.completedAt).toLocaleString("pt-BR") : ""}` : step.status === 1 ? "Etapa atual" : "Aguardando"}
                     </div>
                     <div className="section-copy" style={{ marginTop: 4 }}>
-                      {step.isAutomatic ? "Execução automática/sistêmica" : `Executado por ${step.completedByName || "usuário não identificado"}`}
+                      {step.isAutomatic ? "Execucao automatica/sistemica" : `Executado por ${step.completedByName || "usuario nao identificado"}`}
                     </div>
                   </div>
                   <small>Etapa {step.order}</small>
                   <button className="btn btn-ghost" type="button" onClick={() => setExpandedSteps(current => ({ ...current, [step.id]: !current[step.id] }))}>
                     {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    Mais informações
+                    Mais informacoes
                   </button>
                 </div>
 
@@ -577,6 +589,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                         <div className="data-list" style={{ marginTop: 10 }}>
                           {step.fields.map(field => {
                             const uploadAssets = isUploadField(field.type) ? parseUploadAssets(step.data[field.key]) : [];
+                            const structuredRows = isStructuredListField(field) ? parseStructuredRows(step.data[field.key]) : [];
 
                             return (
                               <div className="data-item" key={`${step.id}-${field.key}`}>
@@ -589,8 +602,31 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                                       </a>
                                     ))}
                                   </div>
+                                ) : structuredRows.length > 0 ? (
+                                  <div style={{ display: "grid", gap: 10, marginTop: 6 }}>
+                                    {structuredRows.map((row, rowIndex) => (
+                                      <div key={`${field.key}-history-row-${rowIndex}`} style={{ border: "1px solid var(--line)", borderRadius: 14, padding: 10 }}>
+                                        <small>Item {rowIndex + 1}</small>
+                                        <div className="data-list" style={{ marginTop: 8 }}>
+                                          {field.options.map(option => {
+                                            const key = option.key?.trim();
+                                            if (!key) {
+                                              return null;
+                                            }
+
+                                            return (
+                                              <div className="data-item" key={`${field.key}-${key}-${rowIndex}`}>
+                                                <small>{option.label}</small>
+                                                <strong>{toText(row[key]) || "-"}</strong>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 ) : (
-                                  <strong>{field.value || "—"}</strong>
+                                  <strong>{field.value || "-"}</strong>
                                 )}
                               </div>
                             );
@@ -601,11 +637,11 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
                     {step.integrationAttempts.length > 0 && (
                       <div style={{ marginTop: 14 }}>
-                        <strong>Integrações da etapa</strong>
+                        <strong>Integracoes da etapa</strong>
                         <div className="data-list" style={{ marginTop: 10 }}>
                           {step.integrationAttempts.map(attempt => (
                             <div className="data-item" key={attempt.id}>
-                              <small>{attempt.method} • {new Date(attempt.createdAt).toLocaleString("pt-BR")}</small>
+                              <small>{attempt.method} | {new Date(attempt.createdAt).toLocaleString("pt-BR")}</small>
                               <strong>{attempt.success ? "Sucesso" : "Falha"} - {attempt.responseStatusCode ?? "sem status"}</strong>
                               <div className="section-copy" style={{ marginTop: 4, wordBreak: "break-word" }}>{attempt.url}</div>
                               {attempt.responsePreview && <pre style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{attempt.responsePreview}</pre>}
@@ -624,7 +660,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
         <section className="card">
           <div style={{ padding: "24px 24px 0" }}>
-            <h2 className="section-title">Execução da etapa atual</h2>
+            <h2 className="section-title">Execucao da etapa atual</h2>
             <p className="section-copy">
               {currentStep ? `Preencha os campos e conclua a etapa "${currentStep.name}".` : "Nenhuma etapa manual ativa no momento."}
             </p>
@@ -655,11 +691,11 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
               )}
 
               {currentStep.fields.map(field => (
-                <div className="field" key={`${currentStep.id}-${field.key}`}>
+                <div className={`field ${isStructuredListField(field) ? "span2" : ""}`} key={`${currentStep.id}-${field.key}`}>
                   <label>{field.label}{field.required ? " *" : ""}</label>
                   {renderFieldInput(
                     field,
-                    formData[field.key] ?? "",
+                    formData[field.key] ?? (isStructuredListField(field) ? [] : ""),
                     next => setFormData(current => ({ ...current, [field.key]: next })),
                     uploadFile,
                     uploadingFieldKey === field.key
@@ -668,7 +704,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
               ))}
 
               <div className="field span2">
-                <label>Observações da etapa</label>
+                <label>Observacoes da etapa</label>
                 <textarea className="textarea" value={notes} onChange={event => setNotes(event.target.value)} />
               </div>
             </div>
@@ -676,7 +712,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
           {currentStep?.isAutomatic && (
             <div className="notice" style={{ margin: 24 }}>
-              Esta etapa é automática. Use o histórico ao lado para acompanhar a execução sistêmica ou consultar detalhes da integração.
+              Esta etapa e automatica. Use o historico ao lado para acompanhar a execucao sistemica ou consultar detalhes da integracao.
             </div>
           )}
 

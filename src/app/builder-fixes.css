@@ -1,0 +1,25 @@
+.builder-row {
+  grid-template-columns: 34px minmax(0, 1.1fr) minmax(0, 1fr) 140px 90px 38px;
+}
+
+.builder-row > * {
+  min-width: 0;
+}
+
+.builder-row-field {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 160px 130px auto 44px;
+}
+
+.option-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+}
+
+.toggle-line.compact {
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .builder-row-field {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 150px 120px auto 44px;
+  }
+}
