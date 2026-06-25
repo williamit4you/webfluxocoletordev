@@ -17,11 +17,11 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (response.status === 401 && typeof window !== "undefined") {
     localStorage.clear();
     window.location.href = "/login";
-    throw new Error("Sessão expirada");
+    throw new Error("Sessao expirada");
   }
 
   if (!response.ok) {
-    let message = "Não foi possível concluir a operação.";
+    let message = response.status === 403 ? "Acesso negado." : "Nao foi possivel concluir a operacao.";
 
     try {
       const body = await response.json();

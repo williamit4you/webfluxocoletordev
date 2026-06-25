@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import type { ExecutionField, FieldOption, Instance } from "@/lib/types";
 import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Paperclip, Play, Save } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 
 type UploadAsset = {
@@ -455,6 +456,7 @@ function renderFieldInput(
 
 export default function Detail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [item, setItem] = useState<Instance | null>(null);
   const [error, setError] = useState("");
   const [formData, setFormData] = useState<Record<string, unknown>>({});
@@ -467,9 +469,25 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const [scanning, setScanning] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
 
+  function exitIfForbidden(cause: unknown) {
+    if (!(cause instanceof Error) || cause.message !== "Acesso negado.") {
+      return false;
+    }
+
+    window.alert("Voce concluiu sua tarefa e nao possui permissao para executar a proxima etapa.");
+    router.push("/tarefas");
+    return true;
+  }
+
   const load = () => api<Instance>(`/instances/${id}`)
     .then(result => syncCurrentStepState(result, setItem, setFormData, setNotes))
-    .catch(e => setError(e.message));
+    .catch(e => {
+      if (exitIfForbidden(e)) {
+        return;
+      }
+
+      setError(e.message);
+    });
 
   useEffect(() => {
     void load();
@@ -628,6 +646,10 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       });
       await load();
     } catch (e) {
+      if (exitIfForbidden(e)) {
+        return;
+      }
+
       setError(e instanceof Error ? e.message : "Nao foi possivel concluir a etapa.");
     } finally {
       setAdvancing(false);
