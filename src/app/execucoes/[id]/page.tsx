@@ -505,6 +505,13 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     [expandedSteps, item]
   );
 
+  function canReprocessStep(step: Instance["steps"][number]) {
+    const isIntegration = step.type === 4 || step.type === 5;
+    const isCurrentAutomatic = step.isAutomatic && step.status === 1;
+    const isCompletedIntegration = isIntegration && step.status === 2;
+    return isCurrentAutomatic || isCompletedIntegration;
+  }
+
   function toggleStepDetails(stepId: string) {
     setExpandedSteps(current => ({ ...current, [stepId]: !current[stepId] }));
   }
@@ -516,7 +523,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   function renderStepDetails(step: Instance["steps"][number]) {
     return (
       <div style={{ marginTop: 14, paddingLeft: 38 }}>
-        {(step.type === 4 || step.type === 5) && step.status === 2 && (
+        {canReprocessStep(step) && (
           <div style={{ marginBottom: 16, display: "flex", justifyContent: "flex-end" }}>
             <button className="btn btn-secondary" type="button" onClick={() => void reprocessStep(step.id)} disabled={reprocessingStepId === step.id}>
               <RotateCw size={16} />
@@ -854,8 +861,18 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           )}
 
           {currentStep?.isAutomatic && (
-            <div className="notice" style={{ margin: 24 }}>
-              Esta etapa e automatica. Use o historico abaixo para acompanhar a execucao sistemica ou consultar detalhes da integracao.
+            <div style={{ margin: 24, display: "grid", gap: 12 }}>
+              <div className="notice">
+                Esta etapa e automatica. Use o historico abaixo para acompanhar a execucao sistemica ou consultar detalhes da integracao.
+              </div>
+              {canReprocessStep(currentStep) && (
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button className="btn btn-secondary" type="button" onClick={() => void reprocessStep(currentStep.id)} disabled={reprocessingStepId === currentStep.id}>
+                    <RotateCw size={16} />
+                    {reprocessingStepId === currentStep.id ? "Reprocessando..." : "Reprocessar etapa"}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
