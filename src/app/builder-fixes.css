@@ -55,6 +55,17 @@
   grid-template-columns: 1fr;
 }
 
+.step-card.dragging,
+.diagram-node.dragging .diagram-node-card {
+  opacity: 0.62;
+  transform: scale(0.98);
+}
+
+.step-card.drop-target {
+  border-color: #78b59f;
+  box-shadow: 0 0 0 4px rgba(98, 175, 145, 0.18);
+}
+
 .step-diagram {
   padding: 20px;
   overflow: hidden;
@@ -145,6 +156,11 @@
 .diagram-node.active .diagram-node-card {
   border-color: #78b59f;
   box-shadow: 0 0 0 4px rgba(98, 175, 145, 0.16), 0 18px 42px rgba(19, 53, 41, 0.12);
+}
+
+.diagram-node.drop-target .diagram-node-card {
+  border-color: #78b59f;
+  box-shadow: 0 0 0 5px rgba(98, 175, 145, 0.2), 0 18px 42px rgba(19, 53, 41, 0.12);
 }
 
 .diagram-node-top {

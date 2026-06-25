@@ -5,6 +5,7 @@ import type { BodyFieldMapping, Field, FieldOption, Flow, FlowToken, Integration
 import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, PencilLine, Plus, Save, Send, Shield, Trash2, Workflow } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import type { DragEvent } from "react";
 
 const stepTypeOptions = [
   { value: 0, label: "Leitor / camera" },
@@ -463,6 +464,8 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
   const [testingStepId, setTestingStepId] = useState<string>("");
   const [testResult, setTestResult] = useState<IntegrationTestResult | null>(null);
   const [copiedReference, setCopiedReference] = useState("");
+  const [dragStepIndex, setDragStepIndex] = useState<number | null>(null);
+  const [dropStepIndex, setDropStepIndex] = useState<number | null>(null);
 
   useEffect(() => {
     let activeRequest = true;
@@ -762,6 +765,60 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     setEditingStep(steps.length);
   }
 
+  function reorderStep(fromIndex: number, toIndex: number) {
+    setSteps(current => {
+      if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= current.length || toIndex >= current.length) {
+        return current;
+      }
+
+      const reordered = [...current];
+      const [movedStep] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, movedStep);
+      setEditingStep(toIndex);
+      return reordered;
+    });
+  }
+
+  function moveStep(index: number, direction: "left" | "right") {
+    const nextIndex = direction === "left" ? index - 1 : index + 1;
+    reorderStep(index, nextIndex);
+  }
+
+  function handleStepDragStart(index: number) {
+    if (!isDraft) {
+      return;
+    }
+
+    setDragStepIndex(index);
+    setDropStepIndex(index);
+  }
+
+  function handleStepDragOver(event: DragEvent<HTMLElement>, index: number) {
+    if (!isDraft || dragStepIndex === null) {
+      return;
+    }
+
+    event.preventDefault();
+    if (dropStepIndex !== index) {
+      setDropStepIndex(index);
+    }
+  }
+
+  function handleStepDrop(index: number) {
+    if (!isDraft || dragStepIndex === null) {
+      return;
+    }
+
+    reorderStep(dragStepIndex, index);
+    setDragStepIndex(null);
+    setDropStepIndex(null);
+  }
+
+  function handleStepDragEnd() {
+    setDragStepIndex(null);
+    setDropStepIndex(null);
+  }
+
   function removeStep(index: number) {
     const next = steps.filter((_, stepIndex) => stepIndex !== index);
     setSteps(next.length > 0 ? next : [createStep()]);
@@ -1030,12 +1087,28 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
         {builderView === "list"
           ? <div className="step-list">
             {steps.map((step, index) =>
-              <article className={`step-card ${editingStep === index ? "active" : ""}`} key={`${step.id ?? "new"}-${index}`}>
+              <article
+                className={`step-card ${editingStep === index ? "active" : ""} ${dragStepIndex === index ? "dragging" : ""} ${dropStepIndex === index ? "drop-target" : ""}`}
+                key={`${step.id ?? "new"}-${index}`}
+                draggable={isDraft}
+                onDragStart={() => handleStepDragStart(index)}
+                onDragOver={event => handleStepDragOver(event, index)}
+                onDrop={() => handleStepDrop(index)}
+                onDragEnd={handleStepDragEnd}
+              >
                 <div className="step-card-top">
                   <span className="step-chip">{index + 1}</span>
-                  <button className="icon-btn" type="button" onClick={() => setEditingStep(index)}>
-                    <PencilLine size={16} />
-                  </button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="icon-btn" type="button" disabled={!isDraft || index === 0} onClick={() => moveStep(index, "left")} aria-label={`Mover etapa ${index + 1} para cima`}>
+                      <ArrowUp size={16} />
+                    </button>
+                    <button className="icon-btn" type="button" disabled={!isDraft || index === steps.length - 1} onClick={() => moveStep(index, "right")} aria-label={`Mover etapa ${index + 1} para baixo`}>
+                      <ArrowDown size={16} />
+                    </button>
+                    <button className="icon-btn" type="button" onClick={() => setEditingStep(index)}>
+                      <PencilLine size={16} />
+                    </button>
+                  </div>
                 </div>
                 <strong>{step.name || `Etapa ${index + 1}`}</strong>
                 <small>{stepTypeOptions.find(option => option.value === step.type)?.label}</small>
@@ -1053,13 +1126,22 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
             <div className="step-diagram-header">
               <div>
                 <h3 className="section-title">Mapa visual do fluxo</h3>
-                <p className="section-copy">Clique em qualquer etapa para abrir a configuracao completa abaixo.</p>
+                <p className="section-copy">Clique em qualquer etapa para abrir a configuracao completa abaixo. Voce tambem pode arrastar para reorganizar.</p>
               </div>
             </div>
             <div className="step-diagram-scroll">
               <div className="step-diagram-canvas" role="list" aria-label="Etapas do fluxo em diagrama">
                 {steps.map((step, index) =>
-                  <div className={`diagram-node ${editingStep === index ? "active" : ""}`} key={`${step.id ?? "new"}-${index}`} role="listitem">
+                  <div
+                    className={`diagram-node ${editingStep === index ? "active" : ""} ${dragStepIndex === index ? "dragging" : ""} ${dropStepIndex === index ? "drop-target" : ""}`}
+                    key={`${step.id ?? "new"}-${index}`}
+                    role="listitem"
+                    draggable={isDraft}
+                    onDragStart={() => handleStepDragStart(index)}
+                    onDragOver={event => handleStepDragOver(event, index)}
+                    onDrop={() => handleStepDrop(index)}
+                    onDragEnd={handleStepDragEnd}
+                  >
                     <button className="diagram-node-card" type="button" onClick={() => setEditingStep(index)}>
                       <div className="diagram-node-top">
                         <span className="step-chip">{index + 1}</span>
@@ -1073,6 +1155,12 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                       </div>
                     </button>
                     <div className="diagram-node-actions">
+                      <button className="icon-btn" type="button" disabled={!isDraft || index === 0} onClick={() => moveStep(index, "left")} aria-label={`Mover etapa ${index + 1} para a esquerda`}>
+                        <ArrowUp size={16} />
+                      </button>
+                      <button className="icon-btn" type="button" disabled={!isDraft || index === steps.length - 1} onClick={() => moveStep(index, "right")} aria-label={`Mover etapa ${index + 1} para a direita`}>
+                        <ArrowDown size={16} />
+                      </button>
                       <button className="icon-btn" type="button" onClick={() => setEditingStep(index)} aria-label={`Editar etapa ${index + 1}`}>
                         <PencilLine size={16} />
                       </button>
