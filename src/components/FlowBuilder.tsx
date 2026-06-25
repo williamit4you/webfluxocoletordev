@@ -167,6 +167,7 @@ type IntegrationFieldReference = {
 
 export function FlowBuilder({ flowId }: { flowId?: string }) {
   const router = useRouter();
+  const [builderView, setBuilderView] = useState<"list" | "diagram">("list");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [active, setActive] = useState(true);
@@ -728,34 +729,92 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
           <h2 className="section-title">Etapas sequenciais</h2>
           <p className="section-copy">Use o lapis para abrir os campos e a configuracao especifica de cada etapa.</p>
         </div>
-        <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={addStep}>
-          <Plus size={16} />
-          Adicionar etapa
-        </button>
+        <div className="builder-toolbar">
+          <div className="view-toggle" role="tablist" aria-label="Modo de visualizacao das etapas">
+            <button
+              className={`view-toggle-btn ${builderView === "list" ? "active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={builderView === "list"}
+              onClick={() => setBuilderView("list")}
+            >
+              Visao 1
+            </button>
+            <button
+              className={`view-toggle-btn ${builderView === "diagram" ? "active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={builderView === "diagram"}
+              onClick={() => setBuilderView("diagram")}
+            >
+              Visao 2
+            </button>
+          </div>
+          <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={addStep}>
+            <Plus size={16} />
+            Adicionar etapa
+          </button>
+        </div>
       </div>
 
-      <div className="step-board">
-        <div className="step-list">
-          {steps.map((step, index) =>
-            <article className={`step-card ${editingStep === index ? "active" : ""}`} key={`${step.id ?? "new"}-${index}`}>
-              <div className="step-card-top">
-                <span className="step-chip">{index + 1}</span>
-                <button className="icon-btn" type="button" onClick={() => setEditingStep(index)}>
-                  <PencilLine size={16} />
+      <div className={`step-board ${builderView === "diagram" ? "step-board-diagram" : ""}`}>
+        {builderView === "list"
+          ? <div className="step-list">
+            {steps.map((step, index) =>
+              <article className={`step-card ${editingStep === index ? "active" : ""}`} key={`${step.id ?? "new"}-${index}`}>
+                <div className="step-card-top">
+                  <span className="step-chip">{index + 1}</span>
+                  <button className="icon-btn" type="button" onClick={() => setEditingStep(index)}>
+                    <PencilLine size={16} />
+                  </button>
+                </div>
+                <strong>{step.name || `Etapa ${index + 1}`}</strong>
+                <small>{stepTypeOptions.find(option => option.value === step.type)?.label}</small>
+                <div className="step-meta">
+                  <span>{step.fields.length} campo(s)</span>
+                  {typeNeedsApi(step.type) && <span>Integracao</span>}
+                </div>
+                <button className="btn btn-ghost btn-inline" type="button" disabled={!isDraft} onClick={() => removeStep(index)}>
+                  <Trash2 size={15} />
+                  Excluir
                 </button>
+              </article>)}
+          </div>
+          : <div className="step-diagram card">
+            <div className="step-diagram-header">
+              <div>
+                <h3 className="section-title">Mapa visual do fluxo</h3>
+                <p className="section-copy">Clique em qualquer etapa para abrir a configuracao completa abaixo.</p>
               </div>
-              <strong>{step.name || `Etapa ${index + 1}`}</strong>
-              <small>{stepTypeOptions.find(option => option.value === step.type)?.label}</small>
-              <div className="step-meta">
-                <span>{step.fields.length} campo(s)</span>
-                {typeNeedsApi(step.type) && <span>Integracao</span>}
+            </div>
+            <div className="step-diagram-scroll">
+              <div className="step-diagram-canvas" role="list" aria-label="Etapas do fluxo em diagrama">
+                {steps.map((step, index) =>
+                  <div className={`diagram-node ${editingStep === index ? "active" : ""}`} key={`${step.id ?? "new"}-${index}`} role="listitem">
+                    <button className="diagram-node-card" type="button" onClick={() => setEditingStep(index)}>
+                      <div className="diagram-node-top">
+                        <span className="step-chip">{index + 1}</span>
+                        <span className="diagram-node-kind">{typeNeedsApi(step.type) ? "Integrado" : "Manual"}</span>
+                      </div>
+                      <strong>{step.name || `Etapa ${index + 1}`}</strong>
+                      <small>{stepTypeOptions.find(option => option.value === step.type)?.label}</small>
+                      <div className="step-meta">
+                        <span>{step.fields.length} campo(s)</span>
+                        {typeNeedsApi(step.type) && <span>API</span>}
+                      </div>
+                    </button>
+                    <div className="diagram-node-actions">
+                      <button className="icon-btn" type="button" onClick={() => setEditingStep(index)} aria-label={`Editar etapa ${index + 1}`}>
+                        <PencilLine size={16} />
+                      </button>
+                      <button className="icon-btn" type="button" disabled={!isDraft} onClick={() => removeStep(index)} aria-label={`Excluir etapa ${index + 1}`}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>)}
               </div>
-              <button className="btn btn-ghost btn-inline" type="button" disabled={!isDraft} onClick={() => removeStep(index)}>
-                <Trash2 size={15} />
-                Excluir
-              </button>
-            </article>)}
-        </div>
+            </div>
+          </div>}
 
         {currentStep && <div className="step-editor card">
           <div className="edit-panel">

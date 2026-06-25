@@ -465,6 +465,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const [advancing, setAdvancing] = useState(false);
   const [uploadingFieldKey, setUploadingFieldKey] = useState("");
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
+  const [journeyView, setJourneyView] = useState<"timeline" | "diagram">("timeline");
   const [readerWarning, setReaderWarning] = useState("");
   const [scanning, setScanning] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
@@ -498,6 +499,101 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     [item]
   );
   const readerMode = currentStep?.type === 0;
+  const selectedJourneyStep = useMemo(
+    () => item?.steps.find(step => expandedSteps[step.id]),
+    [expandedSteps, item]
+  );
+
+  function toggleStepDetails(stepId: string) {
+    setExpandedSteps(current => ({ ...current, [stepId]: !current[stepId] }));
+  }
+
+  function toggleJourneyDiagramDetails(stepId: string) {
+    setExpandedSteps(current => current[stepId] ? {} : { [stepId]: true });
+  }
+
+  function renderStepDetails(step: Instance["steps"][number]) {
+    return (
+      <div style={{ marginTop: 14, paddingLeft: 38 }}>
+        {step.fields.length > 0 && (
+          <>
+            <strong>Dados da etapa</strong>
+            <div className="data-list" style={{ marginTop: 10 }}>
+              {step.fields.map(field => {
+                const uploadAssets = isUploadField(field.type) ? parseUploadAssets(step.data[field.key]) : [];
+                const structuredRows = isStructuredListField(field) ? parseStructuredRows(step.data[field.key]) : [];
+
+                return (
+                  <div className="data-item" key={`${step.id}-${field.key}`}>
+                    <small>{field.label}</small>
+                    {uploadAssets.length > 0 ? (
+                      <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
+                        {uploadAssets.map(asset => (
+                          <a key={asset.id} href={buildAssetUrl(asset.url)} target="_blank" rel="noreferrer">
+                            {asset.fileName}
+                          </a>
+                        ))}
+                      </div>
+                    ) : structuredRows.length > 0 ? (
+                      <div className="tablewrap" style={{ marginTop: 6, border: "1px solid var(--line)", borderRadius: 14 }}>
+                        <table className="table">
+                          <thead>
+                            <tr>
+                              {field.options.map(option => {
+                                const key = option.key?.trim();
+                                if (!key) {
+                                  return null;
+                                }
+
+                                return <th key={`${field.key}-history-header-${key}`}>{option.label}</th>;
+                              })}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {structuredRows.map((row, rowIndex) => (
+                              <tr key={`${field.key}-history-row-${rowIndex}`}>
+                                {field.options.map(option => {
+                                  const key = option.key?.trim();
+                                  if (!key) {
+                                    return null;
+                                  }
+
+                                  return <td key={`${field.key}-${key}-${rowIndex}`}>{toText(row[key]) || "-"}</td>;
+                                })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <strong>{field.value || "-"}</strong>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {step.integrationAttempts.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <strong>Integracoes da etapa</strong>
+            <div className="data-list" style={{ marginTop: 10 }}>
+              {step.integrationAttempts.map(attempt => (
+                <div className="data-item" key={attempt.id}>
+                  <small>{attempt.method} | {new Date(attempt.createdAt).toLocaleString("pt-BR")}</small>
+                  <strong>{attempt.success ? "Sucesso" : "Falha"} - {attempt.responseStatusCode ?? "sem status"}</strong>
+                  <div className="section-copy" style={{ marginTop: 4, wordBreak: "break-word" }}>{attempt.url}</div>
+                  {attempt.responsePreview && <pre style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{attempt.responsePreview}</pre>}
+                  {attempt.errorMessage && <div className="section-copy" style={{ marginTop: 8 }}>{attempt.errorMessage}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   function applyReaderData(nextData: Record<string, unknown>) {
     setFormData(current => ({ ...current, ...nextData }));
@@ -754,10 +850,34 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
         </section>
 
         <section className="card timeline">
-          <h2 className="section-title">Jornada do registro</h2>
-          <p className="section-copy">Acompanhe o status, executor e os detalhes de cada etapa.</p>
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Jornada do registro</h2>
+              <p className="section-copy">Acompanhe o status, executor e os detalhes de cada etapa.</p>
+            </div>
+            <div className="view-toggle" role="tablist" aria-label="Modo de visualizacao da jornada">
+              <button
+                className={`view-toggle-btn ${journeyView === "timeline" ? "active" : ""}`}
+                type="button"
+                role="tab"
+                aria-selected={journeyView === "timeline"}
+                onClick={() => setJourneyView("timeline")}
+              >
+                Visao 1
+              </button>
+              <button
+                className={`view-toggle-btn ${journeyView === "diagram" ? "active" : ""}`}
+                type="button"
+                role="tab"
+                aria-selected={journeyView === "diagram"}
+                onClick={() => setJourneyView("diagram")}
+              >
+                Visao 2
+              </button>
+            </div>
+          </div>
 
-          {item.steps.map(step => {
+          {journeyView === "timeline" && item.steps.map(step => {
             const expanded = !!expandedSteps[step.id];
             return (
               <div key={step.id} className={`timeline-row ${step.status === 2 ? "done" : step.status === 1 ? "current" : ""}`} style={{ display: "block" }}>
@@ -773,95 +893,80 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                     </div>
                   </div>
                   <small>Etapa {step.order}</small>
-                  <button className="btn btn-ghost" type="button" onClick={() => setExpandedSteps(current => ({ ...current, [step.id]: !current[step.id] }))}>
+                  <button className="btn btn-ghost" type="button" onClick={() => toggleStepDetails(step.id)}>
                     {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                     Mais informacoes
                   </button>
                 </div>
 
-                {expanded && (
-                  <div style={{ marginTop: 14, paddingLeft: 38 }}>
-                    {step.fields.length > 0 && (
-                      <>
-                        <strong>Dados da etapa</strong>
-                        <div className="data-list" style={{ marginTop: 10 }}>
-                          {step.fields.map(field => {
-                            const uploadAssets = isUploadField(field.type) ? parseUploadAssets(step.data[field.key]) : [];
-                            const structuredRows = isStructuredListField(field) ? parseStructuredRows(step.data[field.key]) : [];
-
-                            return (
-                              <div className="data-item" key={`${step.id}-${field.key}`}>
-                                <small>{field.label}</small>
-                                {uploadAssets.length > 0 ? (
-                                  <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
-                                    {uploadAssets.map(asset => (
-                                      <a key={asset.id} href={buildAssetUrl(asset.url)} target="_blank" rel="noreferrer">
-                                        {asset.fileName}
-                                      </a>
-                                    ))}
-                                  </div>
-                                ) : structuredRows.length > 0 ? (
-                                  <div className="tablewrap" style={{ marginTop: 6, border: "1px solid var(--line)", borderRadius: 14 }}>
-                                    <table className="table">
-                                      <thead>
-                                        <tr>
-                                          {field.options.map(option => {
-                                            const key = option.key?.trim();
-                                            if (!key) {
-                                              return null;
-                                            }
-
-                                            return <th key={`${field.key}-history-header-${key}`}>{option.label}</th>;
-                                          })}
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {structuredRows.map((row, rowIndex) => (
-                                          <tr key={`${field.key}-history-row-${rowIndex}`}>
-                                            {field.options.map(option => {
-                                              const key = option.key?.trim();
-                                              if (!key) {
-                                                return null;
-                                              }
-
-                                              return <td key={`${field.key}-${key}-${rowIndex}`}>{toText(row[key]) || "-"}</td>;
-                                            })}
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                ) : (
-                                  <strong>{field.value || "-"}</strong>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
-
-                    {step.integrationAttempts.length > 0 && (
-                      <div style={{ marginTop: 14 }}>
-                        <strong>Integracoes da etapa</strong>
-                        <div className="data-list" style={{ marginTop: 10 }}>
-                          {step.integrationAttempts.map(attempt => (
-                            <div className="data-item" key={attempt.id}>
-                              <small>{attempt.method} | {new Date(attempt.createdAt).toLocaleString("pt-BR")}</small>
-                              <strong>{attempt.success ? "Sucesso" : "Falha"} - {attempt.responseStatusCode ?? "sem status"}</strong>
-                              <div className="section-copy" style={{ marginTop: 4, wordBreak: "break-word" }}>{attempt.url}</div>
-                              {attempt.responsePreview && <pre style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{attempt.responsePreview}</pre>}
-                              {attempt.errorMessage && <div className="section-copy" style={{ marginTop: 8 }}>{attempt.errorMessage}</div>}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                {expanded && renderStepDetails(step)}
               </div>
             );
           })}
+
+          {journeyView === "diagram" && (
+            <div className="journey-diagram">
+              <div className="step-diagram-scroll">
+                <div className="step-diagram-canvas" role="list" aria-label="Jornada do registro em diagrama">
+                  {item.steps.map(step => {
+                    const expanded = !!expandedSteps[step.id];
+                    const stateLabel = step.status === 2 ? "Concluida" : step.status === 1 ? "Atual" : "Aguardando";
+                    const actorLabel = step.isAutomatic ? "Execucao automatica/sistemica" : `Executado por ${step.completedByName || "usuario nao identificado"}`;
+
+                    return (
+                      <div key={step.id} className={`diagram-node ${step.status === 1 ? "active" : ""}`} role="listitem">
+                        <button className="diagram-node-card" type="button" onClick={() => toggleJourneyDiagramDetails(step.id)}>
+                          <div className="diagram-node-top">
+                            <span className="step-chip">{step.order}</span>
+                            <span className="diagram-node-kind">{stateLabel}</span>
+                          </div>
+                          <strong>{step.name}</strong>
+                          <small>{actorLabel}</small>
+                          <div className="step-meta">
+                            <span>Etapa {step.order}</span>
+                            {step.integrationAttempts.length > 0 && <span>Integracao</span>}
+                          </div>
+                        </button>
+
+                        <div className="diagram-node-actions">
+                          <button className="btn btn-ghost btn-inline" type="button" onClick={() => toggleJourneyDiagramDetails(step.id)}>
+                            {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            Mais informacoes
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {selectedJourneyStep && (
+                <div className="journey-diagram-panel">
+                  <div className="journey-diagram-panel-head">
+                    <div>
+                      <span className="eyebrow">Etapa {selectedJourneyStep.order}</span>
+                      <h3>{selectedJourneyStep.name}</h3>
+                      <p className="section-copy">
+                        {selectedJourneyStep.status === 2
+                          ? `Concluida ${selectedJourneyStep.completedAt ? new Date(selectedJourneyStep.completedAt).toLocaleString("pt-BR") : ""}`
+                          : selectedJourneyStep.status === 1
+                            ? "Etapa atual em execucao."
+                            : "Etapa aguardando liberacao."}
+                      </p>
+                    </div>
+                    <button className="btn btn-ghost" type="button" onClick={() => toggleJourneyDiagramDetails(selectedJourneyStep.id)}>
+                      <ChevronUp size={16} />
+                      Recolher
+                    </button>
+                  </div>
+
+                  <div className="journey-diagram-details journey-diagram-details-wide">
+                    {renderStepDetails(selectedJourneyStep)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       </div>
     </>
