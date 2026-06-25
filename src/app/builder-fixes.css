@@ -194,6 +194,46 @@
   margin-top: 12px;
 }
 
+.schedule-editor {
+  display: contents;
+}
+
+.schedule-guide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.schedule-guide-card {
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, #fff 0%, #f8fbf9 100%);
+}
+
+.schedule-guide-card.active {
+  border-color: #91c4b0;
+  box-shadow: 0 0 0 3px #e2f4ec;
+}
+
+.schedule-guide-card strong,
+.schedule-guide-card p {
+  display: block;
+}
+
+.schedule-guide-card p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.schedule-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .journey-diagram {
   margin-top: 8px;
 }
@@ -262,6 +302,10 @@
 @media (max-width: 1100px) {
   .builder-row-field {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 150px 120px auto 44px;
+  }
+
+  .schedule-guide {
+    grid-template-columns: 1fr;
   }
 }
 

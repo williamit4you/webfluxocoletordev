@@ -60,6 +60,16 @@ const cronPresets = [
   { label: "Todo dia 18:00", value: "0 18 * * *" }
 ];
 
+const weekdayOptions = [
+  { value: "0", label: "Domingo" },
+  { value: "1", label: "Segunda" },
+  { value: "2", label: "Terca" },
+  { value: "3", label: "Quarta" },
+  { value: "4", label: "Quinta" },
+  { value: "5", label: "Sexta" },
+  { value: "6", label: "Sabado" }
+];
+
 function slugify(value: string) {
   return value
     .normalize("NFD")
@@ -155,6 +165,265 @@ function scheduleHelperText(scheduleMode?: string, scheduleValue?: string, helpe
   return stepType === 3
     ? "Defina quando o fluxo deve iniciar automaticamente."
     : "Use os atalhos abaixo para preencher mais rapido e reduzir erros.";
+}
+
+function parseIntervalScheduleValue(value?: string) {
+  const match = value?.match(/^(\d+)\s+minutos$/i);
+  const totalMinutes = match ? Number(match[1]) : 60;
+
+  if (totalMinutes % 1440 === 0) {
+    return { amount: String(totalMinutes / 1440), unit: "days" as const };
+  }
+
+  if (totalMinutes % 60 === 0) {
+    return { amount: String(totalMinutes / 60), unit: "hours" as const };
+  }
+
+  return { amount: String(totalMinutes), unit: "minutes" as const };
+}
+
+function buildIntervalScheduleValue(amount: string, unit: "minutes" | "hours" | "days") {
+  const numericAmount = Math.max(1, Number(amount) || 1);
+  const totalMinutes = unit === "days"
+    ? numericAmount * 1440
+    : unit === "hours"
+      ? numericAmount * 60
+      : numericAmount;
+
+  return `${totalMinutes} minutos`;
+}
+
+function parseCronScheduleValue(value?: string) {
+  const raw = (value ?? "").trim();
+
+  const daily = raw.match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
+  if (daily) {
+    return {
+      recurrence: "daily" as const,
+      time: `${daily[2].padStart(2, "0")}:${daily[1].padStart(2, "0")}`,
+      weekday: "1",
+      dayOfMonth: "1",
+      raw
+    };
+  }
+
+  const weekly = raw.match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+([0-6])$/);
+  if (weekly) {
+    return {
+      recurrence: "weekly" as const,
+      time: `${weekly[2].padStart(2, "0")}:${weekly[1].padStart(2, "0")}`,
+      weekday: weekly[3],
+      dayOfMonth: "1",
+      raw
+    };
+  }
+
+  const monthly = raw.match(/^(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+\*\s+\*$/);
+  if (monthly) {
+    return {
+      recurrence: "monthly" as const,
+      time: `${monthly[2].padStart(2, "0")}:${monthly[1].padStart(2, "0")}`,
+      weekday: "1",
+      dayOfMonth: monthly[3],
+      raw
+    };
+  }
+
+  return {
+    recurrence: "custom" as const,
+    time: "08:00",
+    weekday: "1",
+    dayOfMonth: "1",
+    raw
+  };
+}
+
+function buildCronScheduleValue(
+  recurrence: "daily" | "weekly" | "monthly" | "custom",
+  time: string,
+  weekday: string,
+  dayOfMonth: string,
+  raw: string
+) {
+  if (recurrence === "custom") {
+    return raw;
+  }
+
+  const [hoursValue = "8", minutesValue = "0"] = (time || "08:00").split(":");
+  const minutes = String(Math.min(59, Math.max(0, Number(minutesValue) || 0)));
+  const hours = String(Math.min(23, Math.max(0, Number(hoursValue) || 0)));
+
+  if (recurrence === "weekly") {
+    return `${minutes} ${hours} * * ${weekday || "1"}`;
+  }
+
+  if (recurrence === "monthly") {
+    const safeDay = String(Math.min(31, Math.max(1, Number(dayOfMonth) || 1)));
+    return `${minutes} ${hours} ${safeDay} * *`;
+  }
+
+  return `${minutes} ${hours} * * *`;
+}
+
+function ScheduleEditor({
+  config,
+  onChange,
+  isDraft,
+  stepType
+}: {
+  config?: StepApiConfig | null;
+  onChange: (patch: Partial<StepApiConfig>) => void;
+  isDraft: boolean;
+  stepType: number;
+}) {
+  const scheduleMode = config?.scheduleMode ?? "manual";
+  const scheduleValue = config?.scheduleValue ?? "";
+  const intervalState = parseIntervalScheduleValue(scheduleValue);
+  const cronState = parseCronScheduleValue(scheduleValue);
+  const helper = scheduleHelperText(scheduleMode, scheduleValue, config?.scheduleAssist?.helperText, stepType);
+
+  function updateInterval(amount: string, unit: "minutes" | "hours" | "days") {
+    onChange({ scheduleValue: buildIntervalScheduleValue(amount, unit) });
+  }
+
+  function updateCron(
+    recurrence: "daily" | "weekly" | "monthly" | "custom",
+    time: string,
+    weekday: string,
+    dayOfMonth: string,
+    raw: string
+  ) {
+    onChange({ scheduleValue: buildCronScheduleValue(recurrence, time, weekday, dayOfMonth, raw) });
+  }
+
+  return (
+    <div className="schedule-editor">
+      <div className="field">
+        <label>Agendamento</label>
+        <select className="select" value={scheduleMode} onChange={e => onChange({ scheduleMode: e.target.value, scheduleValue: e.target.value === "manual" ? "" : scheduleValue })} disabled={!isDraft}>
+          <option value="manual">Manual</option>
+          <option value="interval">Intervalo</option>
+          <option value="cron">Cron</option>
+        </select>
+      </div>
+
+      {scheduleMode !== "manual" && (
+        <div className="schedule-guide span2">
+          <div className={`schedule-guide-card ${scheduleMode === "interval" ? "active" : ""}`}>
+            <strong>Intervalo</strong>
+            <p>Repete de tempos em tempos. Exemplo: a cada 15 minutos, 2 horas ou 1 dia.</p>
+          </div>
+          <div className={`schedule-guide-card ${scheduleMode === "cron" ? "active" : ""}`}>
+            <strong>Cron</strong>
+            <p>Agenda recorrente com horario fixo. Exemplo: todo dia 12:00 ou toda segunda 08:30.</p>
+          </div>
+        </div>
+      )}
+
+      {scheduleMode === "interval" && (
+        <>
+          <div className="field">
+            <label>A cada</label>
+            <input className="input" type="number" min={1} value={intervalState.amount} onChange={e => updateInterval(e.target.value, intervalState.unit)} disabled={!isDraft} />
+          </div>
+          <div className="field">
+            <label>Unidade</label>
+            <select className="select" value={intervalState.unit} onChange={e => updateInterval(intervalState.amount, e.target.value as "minutes" | "hours" | "days")} disabled={!isDraft}>
+              <option value="minutes">Minutos</option>
+              <option value="hours">Horas</option>
+              <option value="days">Dias</option>
+            </select>
+          </div>
+          <div className="field span2">
+            <label>Atalhos</label>
+            <div className="schedule-chip-row">
+              {intervalPresets.map(preset => (
+                <button key={preset.value} className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => onChange({ scheduleValue: preset.value })}>
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {scheduleMode === "cron" && (
+        <>
+          <div className="field span2">
+            <label>Recorrencia</label>
+            <div className="schedule-chip-row">
+              <button className={`btn ${cronState.recurrence === "daily" ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft} onClick={() => updateCron("daily", cronState.time, cronState.weekday, cronState.dayOfMonth, cronState.raw)}>
+                Diario
+              </button>
+              <button className={`btn ${cronState.recurrence === "weekly" ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft} onClick={() => updateCron("weekly", cronState.time, cronState.weekday, cronState.dayOfMonth, cronState.raw)}>
+                Semanal
+              </button>
+              <button className={`btn ${cronState.recurrence === "monthly" ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft} onClick={() => updateCron("monthly", cronState.time, cronState.weekday, cronState.dayOfMonth, cronState.raw)}>
+                Mensal
+              </button>
+              <button className={`btn ${cronState.recurrence === "custom" ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft} onClick={() => onChange({ scheduleValue: cronState.raw || "0 8 * * *" })}>
+                Avancado
+              </button>
+            </div>
+            <div className="section-copy" style={{ marginTop: 8 }}>
+              Agendamento unico por data/hora ainda nao existe no motor atual. Para testes, use recorrencias como diario, semanal ou mensal.
+            </div>
+          </div>
+
+          {cronState.recurrence !== "custom" && (
+            <>
+              <div className="field">
+                <label>Horario</label>
+                <input className="input" type="time" value={cronState.time} onChange={e => updateCron(cronState.recurrence, e.target.value, cronState.weekday, cronState.dayOfMonth, cronState.raw)} disabled={!isDraft} />
+              </div>
+
+              {cronState.recurrence === "weekly" && (
+                <div className="field">
+                  <label>Dia da semana</label>
+                  <select className="select" value={cronState.weekday} onChange={e => updateCron("weekly", cronState.time, e.target.value, cronState.dayOfMonth, cronState.raw)} disabled={!isDraft}>
+                    {weekdayOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {cronState.recurrence === "monthly" && (
+                <div className="field">
+                  <label>Dia do mes</label>
+                  <input className="input" type="number" min={1} max={31} value={cronState.dayOfMonth} onChange={e => updateCron("monthly", cronState.time, cronState.weekday, e.target.value, cronState.raw)} disabled={!isDraft} />
+                </div>
+              )}
+            </>
+          )}
+
+          {cronState.recurrence === "custom" && (
+            <div className="field span2">
+              <label>Expressao cron</label>
+              <input className="input" placeholder="Ex.: 0 8 * * *" value={cronState.raw} onChange={e => onChange({ scheduleValue: e.target.value })} disabled={!isDraft} />
+            </div>
+          )}
+
+          <div className="field span2">
+            <label>Atalhos de preenchimento</label>
+            <div className="schedule-chip-row">
+              {cronPresets.map(preset => (
+                <button key={preset.value} className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => onChange({ scheduleValue: preset.value })}>
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {scheduleMode !== "manual" && (
+        <div className="field span2">
+          <label>Resumo tecnico</label>
+          <input className="input" value={scheduleValue} onChange={e => onChange({ scheduleValue: e.target.value })} disabled={!isDraft} />
+          <div className="section-copy" style={{ marginTop: 8 }}>{helper}</div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 type IntegrationFieldReference = {
@@ -990,33 +1259,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
             </div>
 
             <div className="formgrid">
-              <div className="field">
-                <label>Agendamento</label>
-                <select className="select" value={currentStep.apiConfig?.scheduleMode ?? "manual"} onChange={e => updateApiConfig(editingStep, { scheduleMode: e.target.value })} disabled={!isDraft}>
-                  <option value="manual">Manual</option>
-                  <option value="interval">Intervalo</option>
-                  <option value="cron">Cron</option>
-                </select>
-              </div>
-
-              {(currentStep.apiConfig?.scheduleMode === "interval" || currentStep.apiConfig?.scheduleMode === "cron") && <div className="field span2">
-                <label>Atalhos de preenchimento</label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-                  {(currentStep.apiConfig?.scheduleMode === "interval" ? intervalPresets : cronPresets).map(preset =>
-                    <button key={preset.value} className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateApiConfig(editingStep, { scheduleValue: preset.value })}>
-                      {preset.label}
-                    </button>)}
-                </div>
-              </div>}
-
-              {(currentStep.apiConfig?.scheduleMode === "interval" || currentStep.apiConfig?.scheduleMode === "cron") &&
-                <div className="field span2">
-                  <label>{currentStep.apiConfig?.scheduleMode === "interval" ? "Intervalo" : "Expressao cron"}</label>
-                  <input className="input" placeholder={currentStep.apiConfig?.scheduleMode === "interval" ? "Ex.: 60 minutos" : "Ex.: 0 8 * * *"} value={currentStep.apiConfig?.scheduleValue ?? ""} onChange={e => updateApiConfig(editingStep, { scheduleValue: e.target.value })} disabled={!isDraft} />
-                  <div className="section-copy" style={{ marginTop: 8 }}>
-                    {scheduleHelperText(currentStep.apiConfig?.scheduleMode, currentStep.apiConfig?.scheduleValue, currentStep.apiConfig?.scheduleAssist?.helperText, currentStep.type)}
-                  </div>
-                </div>}
+              <ScheduleEditor config={currentStep.apiConfig} onChange={patch => updateApiConfig(editingStep, patch)} isDraft={isDraft} stepType={currentStep.type} />
             </div>
           </div>}
 
@@ -1050,31 +1293,6 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                   {tokens.map((token, index) => <option key={`${token.id ?? "new"}-${index}`} value={token.name}>{token.name || `Token ${index + 1}`}</option>)}
                 </select>
               </div>
-              <div className="field">
-                <label>Agendamento</label>
-                <select className="select" value={currentStep.apiConfig?.scheduleMode ?? "manual"} onChange={e => updateApiConfig(editingStep, { scheduleMode: e.target.value })} disabled={!isDraft}>
-                  <option value="manual">Manual</option>
-                  <option value="interval">Intervalo</option>
-                  <option value="cron">Cron</option>
-                </select>
-              </div>
-              {(currentStep.apiConfig?.scheduleMode === "interval" || currentStep.apiConfig?.scheduleMode === "cron") && <div className="field span2">
-                <label>Atalhos de preenchimento</label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-                  {(currentStep.apiConfig?.scheduleMode === "interval" ? intervalPresets : cronPresets).map(preset =>
-                    <button key={preset.value} className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateApiConfig(editingStep, { scheduleValue: preset.value })}>
-                      {preset.label}
-                    </button>)}
-                </div>
-              </div>}
-              {(currentStep.apiConfig?.scheduleMode === "interval" || currentStep.apiConfig?.scheduleMode === "cron") &&
-                <div className="field span2">
-                  <label>{currentStep.apiConfig?.scheduleMode === "interval" ? "Intervalo" : "Expressao cron"}</label>
-                  <input className="input" placeholder={currentStep.apiConfig?.scheduleMode === "interval" ? "Ex.: 30 minutos" : "Ex.: */30 * * * *"} value={currentStep.apiConfig?.scheduleValue ?? ""} onChange={e => updateApiConfig(editingStep, { scheduleValue: e.target.value })} disabled={!isDraft} />
-                  <div className="section-copy" style={{ marginTop: 8 }}>
-                    {scheduleHelperText(currentStep.apiConfig?.scheduleMode, currentStep.apiConfig?.scheduleValue, currentStep.apiConfig?.scheduleAssist?.helperText, currentStep.type)}
-                  </div>
-                </div>}
               {currentStep.type === 5 &&
                 <div className="field span2">
                   <label>Template da consulta</label>
@@ -1087,6 +1305,10 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                 </label>
               </div>
             </div>
+
+            {(currentStep.type === 2 || currentStep.type === 5) && <div className="formgrid" style={{ marginTop: 16 }}>
+              <ScheduleEditor config={currentStep.apiConfig} onChange={patch => updateApiConfig(editingStep, patch)} isDraft={isDraft} stepType={currentStep.type} />
+            </div>}
 
             <div className="editor-block">
               <div className="section-header">
