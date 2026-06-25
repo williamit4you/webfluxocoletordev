@@ -2,7 +2,7 @@
 
 import { api } from "@/lib/api";
 import type { ExecutionField, FieldOption, Instance } from "@/lib/types";
-import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Paperclip, Play, Save } from "lucide-react";
+import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Paperclip, Play, RotateCw, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
@@ -464,6 +464,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const [saving, setSaving] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [uploadingFieldKey, setUploadingFieldKey] = useState("");
+  const [reprocessingStepId, setReprocessingStepId] = useState("");
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
   const [journeyView, setJourneyView] = useState<"timeline" | "diagram">("timeline");
   const [readerWarning, setReaderWarning] = useState("");
@@ -515,6 +516,15 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   function renderStepDetails(step: Instance["steps"][number]) {
     return (
       <div style={{ marginTop: 14, paddingLeft: 38 }}>
+        {(step.type === 4 || step.type === 5) && step.status === 2 && (
+          <div style={{ marginBottom: 16, display: "flex", justifyContent: "flex-end" }}>
+            <button className="btn btn-secondary" type="button" onClick={() => void reprocessStep(step.id)} disabled={reprocessingStepId === step.id}>
+              <RotateCw size={16} />
+              {reprocessingStepId === step.id ? "Reprocessando..." : "Reprocessar etapa"}
+            </button>
+          </div>
+        )}
+
         {step.fields.length > 0 && (
           <>
             <strong>Dados da etapa</strong>
@@ -749,6 +759,22 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       setError(e instanceof Error ? e.message : "Nao foi possivel concluir a etapa.");
     } finally {
       setAdvancing(false);
+    }
+  }
+
+  async function reprocessStep(stepId: string) {
+    setReprocessingStepId(stepId);
+    setError("");
+
+    try {
+      const result = await api<Instance>(`/instances/${id}/steps/${stepId}/reprocess`, {
+        method: "POST"
+      });
+      syncCurrentStepState(result, setItem, setFormData, setNotes);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Nao foi possivel reprocessar a etapa.");
+    } finally {
+      setReprocessingStepId("");
     }
   }
 
