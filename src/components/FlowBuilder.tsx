@@ -951,7 +951,11 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
 
     try {
       if (flowId) {
-        await api(`/flows/${flowId}`, { method: "PUT", body: JSON.stringify(payload) });
+        const result = await api<{ id: string }>(`/flows/${flowId}`, { method: "PUT", body: JSON.stringify(payload) });
+        if (result.id && result.id !== flowId) {
+          router.replace(`/fluxos/${result.id}`);
+          return;
+        }
         await reloadFlowState("Rascunho salvo com sucesso.");
       } else {
         const result = await api<{ id: string }>(`/flows`, { method: "POST", body: JSON.stringify(payload) });
