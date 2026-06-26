@@ -56,6 +56,9 @@ export default function FlowsPage() {
           <Workflow color="#176b51" />
           <h2 className="section-title" style={{ marginTop: 14 }}>{flow.name}</h2>
           <p className="section-copy">{flow.description}</p>
+          <div className="notice" style={{ marginBottom: 14 }}>
+            <strong>Versao visivel:</strong> v{flow.versionNumber} | {flow.lifecycleStatus === "Draft" ? "Rascunho" : "Publicado"}
+          </div>
           <div className="flow-card-metrics">
             <span>v{flow.versionNumber}</span>
             <span>{flow.steps.length} etapa(s)</span>

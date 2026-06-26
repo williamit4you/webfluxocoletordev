@@ -1058,6 +1058,26 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     <section className="card formcard">
       <h2 className="section-title">Informacoes basicas</h2>
       <p className="section-copy">Defina a identidade do fluxo e mantenha o cadastro ativo para a operacao.</p>
+      {flowId && (
+        <div className="data-list flow-version-panel" style={{ padding: "0 0 20px" }}>
+          <div className="data-item">
+            <small>Versao do fluxo</small>
+            <strong>v{flowVersion}</strong>
+            <div className="section-copy" style={{ marginTop: 6 }}>
+              Esta e a versao exata usada para diferenciar configuracoes antigas e novas do mesmo fluxo.
+            </div>
+          </div>
+          <div className="data-item">
+            <small>Estado da versao</small>
+            <strong>{isDraft ? "Rascunho" : "Publicado"}</strong>
+            <div className="section-copy" style={{ marginTop: 6 }}>
+              {isDraft
+                ? "Alteracoes feitas aqui valem para esta versao de trabalho ate a publicacao."
+                : "Esta versao publicada permanece como referencia do que ja estava valendo."}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="formgrid">
         <div className="field">
           <label>Nome do fluxo *</label>
@@ -1657,22 +1677,24 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                 <div className="builder">
                   {currentStep.fields.map((field, fieldIndex) =>
                     <div className="field-block" key={`response-map-${field.id ?? "new"}-${fieldIndex}`}>
-                      <div className="builder-row" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                        <div style={{ minWidth: 220 }}>
+                      <div className="response-mapping-row">
+                        <div className="response-mapping-meta">
                           <strong>{field.label || `Campo ${fieldIndex + 1}`}</strong>
-                          <div className="section-copy" style={{ marginTop: 4 }}>
+                          <div className="section-copy response-mapping-copy">
                             Chave interna: {field.key || "defina a chave do campo"}
                           </div>
                         </div>
-                        <input
-                          className="input"
-                          style={{ flex: 1, minWidth: 220 }}
-                          placeholder="Ex.: logradouro ou data.endereco.uf"
-                          value={field.key ? getResponseMappingValue(field.key) : ""}
-                          onChange={e => field.key && updateResponseMapping(field.key, e.target.value)}
-                          disabled={!isDraft || !field.key}
-                        />
-                        {field.key && <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateResponseMapping(field.key, field.key)}>
+                        <div className="response-mapping-input">
+                          <label className="response-mapping-label">Resposta da API</label>
+                          <input
+                            className="input"
+                            placeholder="Ex.: logradouro ou data.endereco.uf"
+                            value={field.key ? getResponseMappingValue(field.key) : ""}
+                            onChange={e => field.key && updateResponseMapping(field.key, e.target.value)}
+                            disabled={!isDraft || !field.key}
+                          />
+                        </div>
+                        {field.key && <button className="btn btn-ghost response-mapping-action" type="button" disabled={!isDraft} onClick={() => updateResponseMapping(field.key, field.key)}>
                           Usar mesma chave
                         </button>}
                       </div>
