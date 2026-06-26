@@ -538,6 +538,22 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     setFlowVersion(flow.versionNumber);
   }
 
+  async function reloadFlowState(successMessage: string) {
+    if (!flowId) {
+      setSuccess(successMessage);
+      return;
+    }
+
+    try {
+      applyLoadedFlow(await api<Flow>(`/flows/${flowId}`));
+      setSuccess(successMessage);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Nao foi possivel recarregar o fluxo.";
+      setSuccess(`${successMessage} O fluxo foi salvo, mas houve falha ao recarregar a tela.`);
+      setError(message);
+    }
+  }
+
   useEffect(() => {
     let activeRequest = true;
 
@@ -936,8 +952,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     try {
       if (flowId) {
         await api(`/flows/${flowId}`, { method: "PUT", body: JSON.stringify(payload) });
-        applyLoadedFlow(await api<Flow>(`/flows/${flowId}`));
-        setSuccess("Rascunho salvo com sucesso.");
+        await reloadFlowState("Rascunho salvo com sucesso.");
       } else {
         const result = await api<{ id: string }>(`/flows`, { method: "POST", body: JSON.stringify(payload) });
         router.replace(`/fluxos/${result.id}`);
@@ -979,8 +994,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
 
     try {
       await api(`/flows/${flowId}/publish`, { method: "POST" });
-      applyLoadedFlow(await api<Flow>(`/flows/${flowId}`));
-      setSuccess("Fluxo publicado com sucesso.");
+      await reloadFlowState("Fluxo publicado com sucesso.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Nao foi possivel publicar o fluxo.");
     } finally {
