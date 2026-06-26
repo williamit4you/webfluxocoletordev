@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@/lib/api";
-import type { ExecutionField, FieldOption, Instance } from "@/lib/types";
+import type { ExecutionField, FieldOption, Flow, Instance, StepApiConfig } from "@/lib/types";
 import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Paperclip, Play, RotateCw, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -28,6 +28,180 @@ function toText(value: unknown) {
 
 function getAutomaticStepTechnicalData(step: Instance["steps"][number]) {
   return Object.entries(step.data).filter(([key]) => key.startsWith("_integration."));
+}
+
+function tryParseIntervalMinutes(value?: string) {
+  if (!value?.trim()) {
+    return null;
+  }
+
+  const trimmed = value.trim().toLowerCase();
+  const direct = Number(trimmed);
+  if (!Number.isNaN(direct) && direct > 0) {
+    return direct;
+  }
+
+  const match = trimmed.match(/^(\d+)\s*(min|mins|minuto|minutos|h|hr|hora|horas)?$/i);
+  if (!match) {
+    return null;
+  }
+
+  const amount = Number(match[1]);
+  const unit = (match[2] ?? "min").toLowerCase();
+  return unit === "h" || unit === "hr" || unit === "hora" || unit === "horas"
+    ? amount * 60
+    : amount;
+}
+
+function parseCronPart(part: string, min: number, max: number) {
+  if (part === "*") {
+    return Array.from({ length: max - min + 1 }, (_, index) => min + index);
+  }
+
+  const values = new Set<number>();
+
+  for (const segment of part.split(",")) {
+    const item = segment.trim();
+    if (!item) {
+      continue;
+    }
+
+    if (item.includes("/")) {
+      const [base, stepRaw] = item.split("/");
+      const step = Number(stepRaw);
+      if (Number.isNaN(step) || step <= 0) {
+        continue;
+      }
+
+      const start = base === "*" || !base ? min : Number(base);
+      const safeStart = Number.isNaN(start) ? min : Math.max(min, Math.min(max, start));
+      for (let current = safeStart; current <= max; current += step) {
+        values.add(current);
+      }
+      continue;
+    }
+
+    if (item.includes("-")) {
+      const [startRaw, endRaw] = item.split("-");
+      const start = Number(startRaw);
+      const end = Number(endRaw);
+      if (Number.isNaN(start) || Number.isNaN(end)) {
+        continue;
+      }
+
+      for (let current = Math.max(min, start); current <= Math.min(max, end); current += 1) {
+        values.add(current);
+      }
+      continue;
+    }
+
+    const value = Number(item);
+    if (!Number.isNaN(value) && value >= min && value <= max) {
+      values.add(value);
+    }
+  }
+
+  return [...values].sort((left, right) => left - right);
+}
+
+function getNextCronOccurrence(expression?: string, fromDate = new Date()) {
+  if (!expression?.trim()) {
+    return null;
+  }
+
+  const parts = expression.trim().split(/\s+/);
+  if (parts.length !== 5) {
+    return null;
+  }
+
+  const [minutePart, hourPart, dayPart, monthPart, weekdayPart] = parts;
+  const minutes = parseCronPart(minutePart, 0, 59);
+  const hours = parseCronPart(hourPart, 0, 23);
+  const days = parseCronPart(dayPart, 1, 31);
+  const months = parseCronPart(monthPart, 1, 12);
+  const weekdays = parseCronPart(weekdayPart, 0, 6);
+
+  if (!minutes.length || !hours.length || !days.length || !months.length || !weekdays.length) {
+    return null;
+  }
+
+  const cursor = new Date(fromDate);
+  cursor.setSeconds(0, 0);
+  cursor.setMinutes(cursor.getMinutes() + 1);
+
+  for (let iteration = 0; iteration < 60 * 24 * 90; iteration += 1) {
+    if (
+      months.includes(cursor.getMonth() + 1)
+      && days.includes(cursor.getDate())
+      && weekdays.includes(cursor.getDay())
+      && hours.includes(cursor.getHours())
+      && minutes.includes(cursor.getMinutes())
+    ) {
+      return new Date(cursor);
+    }
+
+    cursor.setMinutes(cursor.getMinutes() + 1);
+  }
+
+  return null;
+}
+
+function formatScheduleDate(date: Date) {
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function describeAutomaticSchedule(
+  config: StepApiConfig | null | undefined,
+  step: Instance["steps"][number]
+) {
+  const scheduleMode = config?.scheduleMode?.trim().toLowerCase();
+  const scheduleValue = config?.scheduleValue?.trim();
+
+  if (!scheduleMode || scheduleMode === "manual") {
+    return null;
+  }
+
+  if (scheduleMode === "interval") {
+    const intervalMinutes = tryParseIntervalMinutes(scheduleValue);
+    if (!intervalMinutes) {
+      return {
+        label: "Agendamento em intervalo",
+        detail: scheduleValue || "Intervalo nao informado",
+        nextAt: null as Date | null
+      };
+    }
+
+    const latestAttempt = step.integrationAttempts[0]?.createdAt;
+    const baseDate = latestAttempt
+      ? new Date(latestAttempt)
+      : step.startedAt
+        ? new Date(step.startedAt)
+        : new Date();
+    const nextAt = new Date(baseDate.getTime() + intervalMinutes * 60 * 1000);
+
+    return {
+      label: "Agendamento em intervalo",
+      detail: `A cada ${intervalMinutes} minuto(s)`,
+      nextAt
+    };
+  }
+
+  if (scheduleMode === "cron") {
+    const nextAt = getNextCronOccurrence(scheduleValue);
+    return {
+      label: "Agendamento cron",
+      detail: scheduleValue || "Expressao cron nao informada",
+      nextAt
+    };
+  }
+
+  return null;
 }
 
 function formatTechnicalDataLabel(key: string) {
@@ -485,6 +659,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const { id } = use(params);
   const router = useRouter();
   const [item, setItem] = useState<Instance | null>(null);
+  const [flowDefinition, setFlowDefinition] = useState<Flow | null>(null);
   const [error, setError] = useState("");
   const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [notes, setNotes] = useState("");
@@ -509,7 +684,14 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   }
 
   const load = () => api<Instance>(`/instances/${id}`)
-    .then(result => syncCurrentStepState(result, setItem, setFormData, setNotes))
+    .then(async result => {
+      syncCurrentStepState(result, setItem, setFormData, setNotes);
+      try {
+        setFlowDefinition(await api<Flow>(`/flows/${result.flowDefinitionId}`));
+      } catch {
+        setFlowDefinition(null);
+      }
+    })
     .catch(e => {
       if (exitIfForbidden(e)) {
         return;
@@ -530,6 +712,18 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const selectedJourneyStep = useMemo(
     () => item?.steps.find(step => expandedSteps[step.id]),
     [expandedSteps, item]
+  );
+  const currentStepDefinition = useMemo(
+    () => currentStep && flowDefinition
+      ? flowDefinition.steps.find(step => step.id === currentStep.flowStepId)
+      : undefined,
+    [currentStep, flowDefinition]
+  );
+  const automaticSchedule = useMemo(
+    () => currentStep?.isAutomatic
+      ? describeAutomaticSchedule(currentStepDefinition?.apiConfig, currentStep)
+      : null,
+    [currentStep, currentStepDefinition]
   );
 
   function canReprocessStep(step: Instance["steps"][number]) {
@@ -912,6 +1106,22 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
               <div className="notice">
                 Esta etapa e automatica. Use o historico abaixo para acompanhar a execucao sistemica ou consultar detalhes da integracao.
               </div>
+              {automaticSchedule && (
+                <div className="data-list" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
+                  <div className="data-item">
+                    <small>Agendamento configurado</small>
+                    <strong>{automaticSchedule.label}</strong>
+                    <div className="section-copy" style={{ marginTop: 6 }}>{automaticSchedule.detail}</div>
+                  </div>
+                  <div className="data-item">
+                    <small>Proxima execucao prevista</small>
+                    <strong>{automaticSchedule.nextAt ? formatScheduleDate(automaticSchedule.nextAt) : "Nao foi possivel calcular"}</strong>
+                    <div className="section-copy" style={{ marginTop: 6 }}>
+                      O worker verifica etapas agendadas em ciclos de aproximadamente 30 segundos.
+                    </div>
+                  </div>
+                </div>
+              )}
               {canReprocessStep(currentStep) && (
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                   <button className="btn btn-secondary" type="button" onClick={() => void reprocessStep(currentStep.id)} disabled={reprocessingStepId === currentStep.id}>
