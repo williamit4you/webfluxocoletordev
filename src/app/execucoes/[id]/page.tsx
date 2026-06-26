@@ -26,6 +26,33 @@ function toText(value: unknown) {
   return typeof value === "string" ? value : value == null ? "" : String(value);
 }
 
+function getAutomaticStepTechnicalData(step: Instance["steps"][number]) {
+  return Object.entries(step.data).filter(([key]) => key.startsWith("_integration."));
+}
+
+function formatTechnicalDataLabel(key: string) {
+  switch (key) {
+    case "_integration.success":
+      return "Sucesso";
+    case "_integration.method":
+      return "Metodo";
+    case "_integration.url":
+      return "URL";
+    case "_integration.durationMs":
+      return "Duracao (ms)";
+    case "_integration.executedAtUtc":
+      return "Executado em";
+    case "_integration.statusCode":
+      return "Status HTTP";
+    case "_integration.responsePreview":
+      return "Resposta";
+    case "_integration.errorMessage":
+      return "Erro";
+    default:
+      return key.replace("_integration.", "");
+  }
+}
+
 function digitsOnly(value: string) {
   return value.replace(/\D+/g, "");
 }
@@ -521,6 +548,8 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   }
 
   function renderStepDetails(step: Instance["steps"][number]) {
+    const technicalData = getAutomaticStepTechnicalData(step);
+
     return (
       <div style={{ marginTop: 14, paddingLeft: 38 }}>
         {canReprocessStep(step) && (
@@ -590,6 +619,24 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
               })}
             </div>
           </>
+        )}
+
+        {technicalData.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <strong>Dados tecnicos da automacao</strong>
+            <div className="data-list" style={{ marginTop: 10 }}>
+              {technicalData.map(([key, value]) => (
+                <div className="data-item" key={`${step.id}-${key}`}>
+                  <small>{formatTechnicalDataLabel(key)}</small>
+                  {key === "_integration.responsePreview" ? (
+                    <pre style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{toText(value) || "-"}</pre>
+                  ) : (
+                    <strong>{toText(value) || "-"}</strong>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {step.integrationAttempts.length > 0 && (

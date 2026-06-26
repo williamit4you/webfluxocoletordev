@@ -2,9 +2,10 @@
 
 import { api } from "@/lib/api";
 import type { BodyFieldMapping, Field, FieldOption, Flow, FlowToken, IntegrationTestResult, ResponseFieldMapping, Step, StepApiConfig, User } from "@/lib/types";
-import { ArrowDown, ArrowUp, Copy, Eye, EyeOff, PencilLine, Plus, Save, Send, Shield, Trash2, Workflow } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Copy, Eye, EyeOff, PencilLine, Plus, Save, Send, Shield, Trash2, Workflow } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import type { DragEvent } from "react";
 
 const stepTypeOptions = [
@@ -435,6 +436,53 @@ type IntegrationFieldReference = {
   variable: string;
 };
 
+type BuilderSectionKey =
+  | "flowUsers"
+  | "stepBasics"
+  | "fields"
+  | "autoSchedule"
+  | "integration"
+  | "integrationFields"
+  | "bodyMapping"
+  | "responseMapping"
+  | "test";
+
+type BuilderSectionState = Record<BuilderSectionKey, boolean>;
+
+function AccordionSection({
+  title,
+  description,
+  open,
+  onToggle,
+  actions,
+  soft = false,
+  children
+}: {
+  title: string;
+  description?: string;
+  open: boolean;
+  onToggle: () => void;
+  actions?: ReactNode;
+  soft?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <section className={`accordion-section${open ? " open" : ""}${soft ? " soft" : ""}`}>
+      <div className="accordion-header">
+        <button className="accordion-trigger" type="button" onClick={onToggle} aria-expanded={open}>
+          <div>
+            <h4>{title}</h4>
+            {description && <p className="section-copy">{description}</p>}
+          </div>
+          <span className="accordion-icon">{open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</span>
+        </button>
+        {actions && <div className="accordion-actions">{actions}</div>}
+      </div>
+      {open && <div className="accordion-content">{children}</div>}
+    </section>
+  );
+}
+
 export function FlowBuilder({ flowId }: { flowId?: string }) {
   const router = useRouter();
   const [builderView, setBuilderView] = useState<"list" | "diagram">("list");
@@ -466,6 +514,17 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
   const [copiedReference, setCopiedReference] = useState("");
   const [dragStepIndex, setDragStepIndex] = useState<number | null>(null);
   const [dropStepIndex, setDropStepIndex] = useState<number | null>(null);
+  const [openSections, setOpenSections] = useState<BuilderSectionState>({
+    flowUsers: true,
+    stepBasics: true,
+    fields: true,
+    autoSchedule: true,
+    integration: true,
+    integrationFields: false,
+    bodyMapping: false,
+    responseMapping: true,
+    test: false
+  });
 
   useEffect(() => {
     let activeRequest = true;
@@ -529,6 +588,9 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
 
   const isDraft = !flowId || flowStatus === "Draft";
   const currentStep = steps[editingStep];
+  const toggleSection = (section: BuilderSectionKey) => {
+    setOpenSections(current => ({ ...current, [section]: !current[section] }));
+  };
   const availableIntegrationFields: IntegrationFieldReference[] = steps
     .slice(0, editingStep + 1)
     .flatMap((step, stepIndex) =>
@@ -1174,28 +1236,6 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
           </div>}
 
         {currentStep && <div className="step-editor card">
-          <div className="edit-panel">
-            <div className="section-header">
-              <div>
-                <h4>Usuarios do fluxo</h4>
-                <p className="section-copy">Quem estiver vinculado ao fluxo pode localizar e executar tarefas deste fluxo inteiro.</p>
-              </div>
-            </div>
-
-            {users.length === 0 && <div className="empty compact">Nenhum usuario disponivel para vincular.</div>}
-
-            {users.length > 0 && <>
-              <input className="input" placeholder="Buscar usuario no fluxo..." value={flowUserFilter} onChange={e => setFlowUserFilter(e.target.value)} disabled={!isDraft} />
-              <div style={{ marginTop: 12, maxHeight: 220, overflow: "auto", border: "1px solid var(--line)", borderRadius: 12, padding: 10, display: "grid", gap: 8 }}>
-                {filteredFlowUsers.map(user => <label key={user.id} className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: assignedUserIds.includes(user.id) ? "#eef7f2" : "#fff" }}>
-                  <input type="checkbox" checked={assignedUserIds.includes(user.id)} onChange={() => toggleFlowUser(user.id)} disabled={!isDraft} />
-                  {user.name} <small style={{ color: "var(--muted)" }}>{user.email}</small>
-                </label>)}
-                {filteredFlowUsers.length === 0 && <div className="empty compact">Nenhum usuario encontrado.</div>}
-              </div>
-            </>}
-          </div>
-
           <div className="step-editor-header">
             <div>
               <span className="eyebrow">Etapa {editingStep + 1}</span>
@@ -1204,50 +1244,78 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
             <Workflow size={20} />
           </div>
 
-          <div className="formgrid">
-            <div className="field">
-              <label>Nome da etapa *</label>
-              <input className="input" value={currentStep.name} onChange={e => updateStep(editingStep, { name: e.target.value })} disabled={!isDraft} />
+          <AccordionSection
+            title="Acesso ao fluxo"
+            description="Quem estiver vinculado ao fluxo pode localizar e executar tarefas deste fluxo inteiro."
+            open={openSections.flowUsers}
+            onToggle={() => toggleSection("flowUsers")}
+            soft
+          >
+            <div className="edit-panel" style={{ marginBottom: 0 }}>
+              {users.length === 0 && <div className="empty compact">Nenhum usuario disponivel para vincular.</div>}
+
+              {users.length > 0 && <>
+                <input className="input" placeholder="Buscar usuario no fluxo..." value={flowUserFilter} onChange={e => setFlowUserFilter(e.target.value)} disabled={!isDraft} />
+                <div style={{ marginTop: 12, maxHeight: 220, overflow: "auto", border: "1px solid var(--line)", borderRadius: 12, padding: 10, display: "grid", gap: 8 }}>
+                  {filteredFlowUsers.map(user => <label key={user.id} className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: assignedUserIds.includes(user.id) ? "#eef7f2" : "#fff" }}>
+                    <input type="checkbox" checked={assignedUserIds.includes(user.id)} onChange={() => toggleFlowUser(user.id)} disabled={!isDraft} />
+                    {user.name} <small style={{ color: "var(--muted)" }}>{user.email}</small>
+                  </label>)}
+                  {filteredFlowUsers.length === 0 && <div className="empty compact">Nenhum usuario encontrado.</div>}
+                </div>
+              </>}
             </div>
-            <div className="field">
-              <label>Tipo de entrada</label>
-              <select className="select" value={currentStep.type} onChange={e => updateStep(editingStep, { type: Number(e.target.value), apiConfig: createApiConfig() })} disabled={!isDraft}>
-                {stepTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </div>
-            <div className="field span2">
-              <label>Usuarios da etapa</label>
-              <input className="input" placeholder="Buscar usuario na etapa..." value={stepUserFilter} onChange={e => setStepUserFilter(e.target.value)} disabled={!isDraft} />
-              <div style={{ maxHeight: 220, overflow: "auto", border: "1px solid var(--line)", borderRadius: 12, padding: 10, display: "grid", gap: 8 }}>
-                <label className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: currentStep.assignedUserIds.length === 0 ? "#eef7f2" : "#fff" }}>
-                  <input type="checkbox" checked={currentStep.assignedUserIds.length === 0} onChange={() => updateStep(editingStep, { assignedUserIds: [] })} disabled={!isDraft} />
-                  Qualquer usuario com acesso ao fluxo
-                </label>
-                {filteredStepUsers.map(user => <label key={user.id} className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: currentStep.assignedUserIds.includes(user.id) ? "#eef7f2" : "#fff" }}>
-                  <input type="checkbox" checked={currentStep.assignedUserIds.includes(user.id)} onChange={() => toggleStepUser(user.id)} disabled={!isDraft} />
-                  {user.name} <small style={{ color: "var(--muted)" }}>{user.email}</small>
-                </label>)}
-                {filteredStepUsers.length === 0 && <div className="empty compact">Nenhum usuario encontrado.</div>}
+          </AccordionSection>
+
+          <AccordionSection
+            title="Cadastro da etapa"
+            description="Defina nome, tipo, responsaveis e contexto geral desta etapa."
+            open={openSections.stepBasics}
+            onToggle={() => toggleSection("stepBasics")}
+          >
+            <div className="formgrid">
+              <div className="field">
+                <label>Nome da etapa *</label>
+                <input className="input" value={currentStep.name} onChange={e => updateStep(editingStep, { name: e.target.value })} disabled={!isDraft} />
+              </div>
+              <div className="field">
+                <label>Tipo de entrada</label>
+                <select className="select" value={currentStep.type} onChange={e => updateStep(editingStep, { type: Number(e.target.value), apiConfig: createApiConfig() })} disabled={!isDraft}>
+                  {stepTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </div>
+              <div className="field span2">
+                <label>Usuarios da etapa</label>
+                <input className="input" placeholder="Buscar usuario na etapa..." value={stepUserFilter} onChange={e => setStepUserFilter(e.target.value)} disabled={!isDraft} />
+                <div style={{ maxHeight: 220, overflow: "auto", border: "1px solid var(--line)", borderRadius: 12, padding: 10, display: "grid", gap: 8 }}>
+                  <label className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: currentStep.assignedUserIds.length === 0 ? "#eef7f2" : "#fff" }}>
+                    <input type="checkbox" checked={currentStep.assignedUserIds.length === 0} onChange={() => updateStep(editingStep, { assignedUserIds: [] })} disabled={!isDraft} />
+                    Qualquer usuario com acesso ao fluxo
+                  </label>
+                  {filteredStepUsers.map(user => <label key={user.id} className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: currentStep.assignedUserIds.includes(user.id) ? "#eef7f2" : "#fff" }}>
+                    <input type="checkbox" checked={currentStep.assignedUserIds.includes(user.id)} onChange={() => toggleStepUser(user.id)} disabled={!isDraft} />
+                    {user.name} <small style={{ color: "var(--muted)" }}>{user.email}</small>
+                  </label>)}
+                  {filteredStepUsers.length === 0 && <div className="empty compact">Nenhum usuario encontrado.</div>}
+                </div>
+              </div>
+              <div className="field span2">
+                <label>Descricao</label>
+                <textarea className="textarea" value={currentStep.description ?? ""} onChange={e => updateStep(editingStep, { description: e.target.value })} disabled={!isDraft} />
               </div>
             </div>
-            <div className="field span2">
-              <label>Descricao</label>
-              <textarea className="textarea" value={currentStep.description ?? ""} onChange={e => updateStep(editingStep, { description: e.target.value })} disabled={!isDraft} />
-            </div>
-          </div>
+          </AccordionSection>
 
-          <div className="editor-block">
-            <div className="section-header">
-              <div>
-                <h4>Campos de registro da etapa</h4>
-                <p className="section-copy">Esses campos aparecem quando a etapa precisa capturar dados.</p>
-              </div>
-              <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => updateStep(editingStep, { fields: [...currentStep.fields, createField()] })}>
-                <Plus size={16} />
-                Adicionar campo
-              </button>
-            </div>
-
+          <AccordionSection
+            title="Campos de registro"
+            description="Esses campos aparecem quando a etapa precisa capturar dados."
+            open={openSections.fields}
+            onToggle={() => toggleSection("fields")}
+            actions={<button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => updateStep(editingStep, { fields: [...currentStep.fields, createField()] })}>
+              <Plus size={16} />
+              Adicionar campo
+            </button>}
+          >
             <div className="builder">
               {currentStep.fields.length === 0 && <div className="empty compact">Nenhum campo cadastrado nesta etapa.</div>}
               {currentStep.fields.map((field, fieldIndex) =>
@@ -1336,29 +1404,25 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                   </div>}
                 </div>)}
             </div>
-          </div>
+          </AccordionSection>
 
-          {currentStep.type === 3 && <div className="editor-block">
-            <div className="section-header">
-              <div>
-                <h4>Agendamento de inicio</h4>
-                <p className="section-copy">Configure quando novas execucoes deste fluxo devem ser iniciadas automaticamente.</p>
-              </div>
-            </div>
-
+          {currentStep.type === 3 && <AccordionSection
+            title="Agendamento de inicio"
+            description="Configure quando novas execucoes deste fluxo devem ser iniciadas automaticamente."
+            open={openSections.autoSchedule}
+            onToggle={() => toggleSection("autoSchedule")}
+          >
             <div className="formgrid">
               <ScheduleEditor config={currentStep.apiConfig} onChange={patch => updateApiConfig(editingStep, patch)} isDraft={isDraft} stepType={currentStep.type} />
             </div>
-          </div>}
+          </AccordionSection>}
 
-          {typeNeedsApi(currentStep.type) && <div className="editor-block">
-            <div className="section-header">
-              <div>
-                <h4>Integracao da etapa</h4>
-                <p className="section-copy">Configure envio, consulta ou monitoramento por API na propria etapa.</p>
-              </div>
-            </div>
-
+          {typeNeedsApi(currentStep.type) && <AccordionSection
+            title="Integracao da etapa"
+            description="Configure envio, consulta ou monitoramento por API na propria etapa."
+            open={openSections.integration}
+            onToggle={() => toggleSection("integration")}
+          >
             <div className="formgrid">
               <div className="field">
                 <label>URL</label>
@@ -1398,14 +1462,12 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
               <ScheduleEditor config={currentStep.apiConfig} onChange={patch => updateApiConfig(editingStep, patch)} isDraft={isDraft} stepType={currentStep.type} />
             </div>}
 
-            <div className="editor-block">
-              <div className="section-header">
-                <div>
-                  <h4>Campos disponiveis para integracao</h4>
-                  <p className="section-copy">Reaproveite dados das etapas anteriores para montar URL, consulta ou identificar o registro enviado para a API.</p>
-                </div>
-              </div>
-
+            <AccordionSection
+              title="Campos disponiveis para integracao"
+              description="Reaproveite dados das etapas anteriores para montar URL, consulta ou identificar o registro enviado para a API."
+              open={openSections.integrationFields}
+              onToggle={() => toggleSection("integrationFields")}
+            >
               {availableIntegrationFields.length === 0 && <div className="empty compact">Cadastre campos em etapas anteriores para reutiliza-los nesta integracao.</div>}
 
               {availableIntegrationFields.length > 0 && <div className="builder">
@@ -1493,18 +1555,16 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                 <pre style={{ whiteSpace: "pre-wrap", marginTop: 10 }}>{payloadPreview}</pre>
               </div>}
 
-              {currentStep.type === 4 && <div className="editor-block">
-                <div className="section-header">
-                  <div>
-                    <h4>Body customizado</h4>
-                    <p className="section-copy">Opcionalmente, monte o corpo com nomes de propriedades diferentes dos campos internos. Ex.: <code>numeroNota</code> recebe <code>{"{{notafiscal}}"}</code>.</p>
-                  </div>
-                  <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={addBodyMapping}>
-                    <Plus size={14} />
-                    Adicionar mapeamento
-                  </button>
-                </div>
-
+              {currentStep.type === 4 && <AccordionSection
+                title="Body customizado"
+                description='Opcionalmente, monte o corpo com nomes de propriedades diferentes dos campos internos. Ex.: numeroNota recebe {{notafiscal}}.'
+                open={openSections.bodyMapping}
+                onToggle={() => toggleSection("bodyMapping")}
+                actions={<button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={addBodyMapping}>
+                  <Plus size={14} />
+                  Adicionar mapeamento
+                </button>}
+              >
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
                   <button className="btn btn-ghost" type="button" disabled={!isDraft || availableIntegrationFields.length === 0} onClick={buildBodyMappingsFromSelectedFields}>
                     Gerar pelos campos selecionados
@@ -1561,19 +1621,17 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                     Dica: use ponto no nome da propriedade para criar objetos aninhados, como <code>cliente.documento</code> ou <code>nota.numero</code>.
                   </div>
                 </div>}
-              </div>}
+              </AccordionSection>}
 
-              {currentStep.type === 5 && currentStep.fields.length > 0 && <div className="editor-block">
-                <div className="section-header">
-                  <div>
-                    <h4>Mapeamento da resposta da API</h4>
-                    <p className="section-copy">Defina qual propriedade do JSON retornado preenche cada campo desta etapa. Exemplo ViaCEP: `logradouro`, `bairro`, `localidade`, `uf`.</p>
-                  </div>
-                  <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={fillResponseMappingsByFieldKey}>
-                    Preencher pelo nome do campo
-                  </button>
-                </div>
-
+              {currentStep.type === 5 && currentStep.fields.length > 0 && <AccordionSection
+                title="Mapeamento da resposta da API"
+                description="Defina qual propriedade do JSON retornado preenche cada campo desta etapa. Exemplo ViaCEP: logradouro, bairro, localidade, uf."
+                open={openSections.responseMapping}
+                onToggle={() => toggleSection("responseMapping")}
+                actions={<button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={fillResponseMappingsByFieldKey}>
+                  Preencher pelo nome do campo
+                </button>}
+              >
                 <div className="builder">
                   {currentStep.fields.map((field, fieldIndex) =>
                     <div className="field-block" key={`response-map-${field.id ?? "new"}-${fieldIndex}`}>
@@ -1598,20 +1656,19 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                       </div>
                     </div>)}
                 </div>
-              </div>}
-            </div>
+              </AccordionSection>}
+            </AccordionSection>
 
-            <div className="editor-block">
-              <div className="section-header">
-                <div>
-                  <h4>Teste controlado</h4>
-                  <p className="section-copy">Salve o rascunho e teste com um JSON de exemplo sem avancar execucoes reais.</p>
-                </div>
-                <button className="btn btn-secondary" type="button" disabled={!flowId || !currentStep.id || testingStepId === currentStep.id} onClick={testIntegration}>
-                  <Send size={15} />
-                  {testingStepId === currentStep.id ? "Testando..." : "Testar integracao"}
-                </button>
-              </div>
+            <AccordionSection
+              title="Teste controlado"
+              description="Salve o rascunho e teste com um JSON de exemplo sem avancar execucoes reais."
+              open={openSections.test}
+              onToggle={() => toggleSection("test")}
+              actions={<button className="btn btn-secondary" type="button" disabled={!flowId || !currentStep.id || testingStepId === currentStep.id} onClick={testIntegration}>
+                <Send size={15} />
+                {testingStepId === currentStep.id ? "Testando..." : "Testar integracao"}
+              </button>}
+            >
               <div className="field">
                 <label>JSON de exemplo</label>
                 <textarea className="textarea" value={testPayload} onChange={e => setTestPayload(e.target.value)} />
@@ -1627,8 +1684,8 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                 </div>}
                 {testResult.errorMessage && <div style={{ marginTop: 8 }}>{testResult.errorMessage}</div>}
               </div>}
-            </div>
-          </div>}
+            </AccordionSection>
+          </AccordionSection>}
         </div>}
       </div>
 
