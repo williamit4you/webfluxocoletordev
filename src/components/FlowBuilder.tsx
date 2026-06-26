@@ -526,6 +526,18 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     test: false
   });
 
+  function applyLoadedFlow(flow: Flow) {
+    setName(flow.name);
+    setDescription(flow.description);
+    setActive(flow.active);
+    setTokens(flow.tokens);
+    setAssignedUserIds(flow.assignedUserIds ?? []);
+    setSteps(flow.steps.length > 0 ? flow.steps : [createStep()]);
+    setEditingStep(0);
+    setFlowStatus(flow.lifecycleStatus);
+    setFlowVersion(flow.versionNumber);
+  }
+
   useEffect(() => {
     let activeRequest = true;
 
@@ -559,16 +571,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
         if (!activeRequest) {
           return;
         }
-
-        setName(flow.name);
-        setDescription(flow.description);
-        setActive(flow.active);
-        setTokens(flow.tokens);
-        setAssignedUserIds(flow.assignedUserIds ?? []);
-        setSteps(flow.steps.length > 0 ? flow.steps : [createStep()]);
-        setEditingStep(0);
-        setFlowStatus(flow.lifecycleStatus);
-        setFlowVersion(flow.versionNumber);
+        applyLoadedFlow(flow);
       })
       .catch(e => {
         if (activeRequest) {
@@ -933,6 +936,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     try {
       if (flowId) {
         await api(`/flows/${flowId}`, { method: "PUT", body: JSON.stringify(payload) });
+        applyLoadedFlow(await api<Flow>(`/flows/${flowId}`));
         setSuccess("Rascunho salvo com sucesso.");
       } else {
         const result = await api<{ id: string }>(`/flows`, { method: "POST", body: JSON.stringify(payload) });
@@ -975,7 +979,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
 
     try {
       await api(`/flows/${flowId}/publish`, { method: "POST" });
-      setFlowStatus("Published");
+      applyLoadedFlow(await api<Flow>(`/flows/${flowId}`));
       setSuccess("Fluxo publicado com sucesso.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Nao foi possivel publicar o fluxo.");

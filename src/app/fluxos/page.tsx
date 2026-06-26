@@ -12,8 +12,26 @@ export default function FlowsPage() {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [error, setError] = useState("");
 
+  async function loadFlows() {
+    try {
+      setError("");
+      setFlows(await api<Flow[]>("/flows?scope=builder"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Nao foi possivel carregar os fluxos.");
+    }
+  }
+
   useEffect(() => {
-    api<Flow[]>("/flows?scope=builder").then(setFlows).catch(e => setError(e instanceof Error ? e.message : "Nao foi possivel carregar os fluxos."));
+    void loadFlows();
+
+    const handlePageShow = () => {
+      void loadFlows();
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+    };
   }, []);
 
   return <>
