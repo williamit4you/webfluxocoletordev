@@ -218,6 +218,10 @@ function formatTechnicalDataLabel(key: string) {
       return "Executado em";
     case "_integration.statusCode":
       return "Status HTTP";
+    case "_integration.requestHeaders":
+      return "Headers enviados";
+    case "_integration.requestBody":
+      return "Body enviado";
     case "_integration.responsePreview":
       return "Resposta";
     case "_integration.errorMessage":
@@ -822,7 +826,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
               {technicalData.map(([key, value]) => (
                 <div className="data-item" key={`${step.id}-${key}`}>
                   <small>{formatTechnicalDataLabel(key)}</small>
-                  {key === "_integration.responsePreview" ? (
+                  {key === "_integration.responsePreview" || key === "_integration.requestHeaders" || key === "_integration.requestBody" ? (
                     <pre style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{toText(value) || "-"}</pre>
                   ) : (
                     <strong>{toText(value) || "-"}</strong>
@@ -842,6 +846,14 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                   <small>{attempt.method} | {new Date(attempt.createdAt).toLocaleString("pt-BR")}</small>
                   <strong>{attempt.success ? "Sucesso" : "Falha"} - {attempt.responseStatusCode ?? "sem status"}</strong>
                   <div className="section-copy" style={{ marginTop: 4, wordBreak: "break-word" }}>{attempt.url}</div>
+                  {attempt.requestHeaders && <>
+                    <div className="section-copy" style={{ marginTop: 8 }}>Headers enviados</div>
+                    <pre style={{ whiteSpace: "pre-wrap", marginTop: 6 }}>{attempt.requestHeaders}</pre>
+                  </>}
+                  {attempt.requestBody && <>
+                    <div className="section-copy" style={{ marginTop: 8 }}>Body enviado</div>
+                    <pre style={{ whiteSpace: "pre-wrap", marginTop: 6 }}>{attempt.requestBody}</pre>
+                  </>}
                   {attempt.responsePreview && <pre style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{attempt.responsePreview}</pre>}
                   {attempt.errorMessage && <div className="section-copy" style={{ marginTop: 8 }}>{attempt.errorMessage}</div>}
                 </div>
