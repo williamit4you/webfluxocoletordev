@@ -14,6 +14,8 @@ export default function DashboardPage() {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [flowId, setFlowId] = useState("");
   const [search, setSearch] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,10 +30,14 @@ export default function DashboardPage() {
 
   const selectedFlow = flows.find(flow => flow.id === flowId);
   const filtered = useMemo(() => {
+    const startDateValue = startDate ? new Date(`${startDate}T00:00:00`) : null;
+
     return rows.filter(row =>
       row.flowDefinitionId === flowId &&
-      (!search || row.code.toLowerCase().includes(search.toLowerCase())));
-  }, [flowId, rows, search]);
+      (!search || row.code.toLowerCase().includes(search.toLowerCase())) &&
+      (!startDateValue || new Date(row.createdAt) >= startDateValue) &&
+      (statusFilter === "all" || String(row.status) === statusFilter));
+  }, [flowId, rows, search, startDate, statusFilter]);
 
   return <>
     <div className="pagehead">
@@ -71,6 +77,19 @@ export default function DashboardPage() {
         <label>Fluxo</label>
         <select className="select" value={flowId} onChange={e => setFlowId(e.target.value)}>
           {flows.map(flow => <option key={flow.id} value={flow.id}>{flow.name}</option>)}
+        </select>
+      </div>
+      <div className="field" style={{ minWidth: 190 }}>
+        <label>Data inicial</label>
+        <input className="input" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+      </div>
+      <div className="field" style={{ minWidth: 200 }}>
+        <label>Status do processo</label>
+        <select className="select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <option value="all">Todos</option>
+          <option value="0">Em andamento</option>
+          <option value="1">Concluído</option>
+          <option value="2">Cancelado</option>
         </select>
       </div>
       <div className="field search">

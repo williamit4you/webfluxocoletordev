@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@/lib/api";
-import type { BodyFieldMapping, Field, FieldOption, Flow, FlowToken, IntegrationTestResult, ResponseFieldMapping, Step, StepApiConfig, User } from "@/lib/types";
+import type { BodyFieldMapping, Field, FieldOption, Flow, FlowToken, IntegrationTestResult, RequestHeader, ResponseFieldMapping, Step, StepApiConfig, User } from "@/lib/types";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Copy, Eye, EyeOff, PencilLine, Plus, Save, Send, Shield, Trash2, Workflow } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -102,7 +102,7 @@ function createField(): Field {
 }
 
 function createApiConfig(): StepApiConfig {
-  return { validateTls: true, method: "GET", scheduleMode: "manual", sendFieldKeys: [], responseMappings: [], bodyMappings: [] };
+  return { validateTls: true, method: "GET", scheduleMode: "manual", sendFieldKeys: [], responseMappings: [], bodyMappings: [], headers: [], bodyTemplate: "" };
 }
 
 function createStep(name = ""): Step {
@@ -118,11 +118,23 @@ function createStep(name = ""): Step {
 }
 
 function createToken(): FlowToken {
-  return { name: "", value: "", type: 0, headerName: "", active: true };
+  return { name: "", value: "", type: 0, headerName: "Authorization", active: true };
+}
+
+function defaultHeaderNameForTokenType(type: number) {
+  return type === 0 ? "Authorization" : "X-API-Key";
+}
+
+function tokenTypeLabel(type: number) {
+  return type === 0 ? "Bearer" : "Header customizado";
 }
 
 function createBodyMapping(): BodyFieldMapping {
   return { targetKey: "", sourceReference: "" };
+}
+
+function createRequestHeader(): RequestHeader {
+  return { name: "", value: "" };
 }
 
 function normalizeBodyTargetKey(value: string) {
@@ -631,12 +643,16 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     : "";
   const currentStepResponseMappings = currentStep?.apiConfig?.responseMappings ?? [];
   const currentBodyMappings = currentStep?.apiConfig?.bodyMappings ?? [];
+  const currentHeaders = currentStep?.apiConfig?.headers ?? [];
+  const currentBodyTemplate = currentStep?.apiConfig?.bodyTemplate ?? "";
   const orderedSelectedSendFields = selectedSendFieldKeys.length > 0
     ? selectedSendFieldKeys
       .map(key => availableIntegrationFields.find(field => field.key === key))
       .filter((field): field is IntegrationFieldReference => !!field)
     : availableIntegrationFields;
-  const customBodyPreview = currentBodyMappings.length > 0
+  const customBodyPreview = currentBodyTemplate.trim()
+    ? currentBodyTemplate
+    : currentBodyMappings.length > 0
     ? `{\n${currentBodyMappings
       .filter(mapping => mapping.targetKey.trim() || mapping.sourceReference.trim())
       .map(mapping => `  "${mapping.targetKey || "campo"}": "${mapping.sourceReference || "{{variavel}}"}`).join(",\n")}\n}`
@@ -685,6 +701,29 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
 
   function updateToken(index: number, patch: Partial<FlowToken>) {
     setTokens(current => current.map((token, tokenIndex) => tokenIndex === index ? { ...token, ...patch } : token));
+  }
+
+  function changeTokenType(index: number, nextType: number) {
+    setTokens(current => current.map((token, tokenIndex) => {
+      if (tokenIndex !== index) {
+        return token;
+      }
+
+      const currentHeader = token.headerName?.trim() ?? "";
+      const nextHeader = currentHeader.length === 0 || currentHeader === "Authorization" || currentHeader === "X-API-Key"
+        ? defaultHeaderNameForTokenType(nextType)
+        : currentHeader;
+
+      return {
+        ...token,
+        type: nextType,
+        headerName: nextHeader
+      };
+    }));
+  }
+
+  function applyTokenHeaderPreset(index: number, headerName: string) {
+    updateToken(index, { type: 1, headerName });
   }
 
   function updateApiConfig(stepIndex: number, patch: Partial<StepApiConfig>) {
@@ -841,6 +880,29 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     updateApiConfig(editingStep, { bodyMappings: nextMappings });
   }
 
+  function buildBodyTemplateFromSelectedFields() {
+    const sourceFields = orderedSelectedSendFields.length > 0 ? orderedSelectedSendFields : availableIntegrationFields;
+    const template = sourceFields.reduce<Record<string, string>>((accumulator, field) => {
+      accumulator[field.key] = field.variable;
+      return accumulator;
+    }, {});
+
+    updateApiConfig(editingStep, { bodyTemplate: JSON.stringify(template, null, 2) });
+  }
+
+  function updateRequestHeader(index: number, patch: Partial<RequestHeader>) {
+    const nextHeaders = currentHeaders.map((header, headerIndex) => headerIndex === index ? { ...header, ...patch } : header);
+    updateApiConfig(editingStep, { headers: nextHeaders });
+  }
+
+  function addRequestHeader() {
+    updateApiConfig(editingStep, { headers: [...currentHeaders, createRequestHeader()] });
+  }
+
+  function removeRequestHeader(index: number) {
+    updateApiConfig(editingStep, { headers: currentHeaders.filter((_, headerIndex) => headerIndex !== index) });
+  }
+
   function addStep() {
     setSteps(current => [...current, createStep()]);
     setEditingStep(steps.length);
@@ -930,6 +992,11 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
       steps: steps.map((step, stepIndex) => ({
         ...step,
         order: stepIndex + 1,
+        apiConfig: step.apiConfig ? {
+          ...step.apiConfig,
+          bodyTemplate: step.apiConfig.bodyTemplate?.trim() || "",
+          headers: (step.apiConfig.headers ?? []).map(header => ({ name: header.name.trim(), value: header.value.trim() }))
+        } : step.apiConfig,
         fields: step.fields.map((field, fieldIndex) => ({
           ...field,
           order: fieldIndex + 1,
@@ -1120,14 +1187,41 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
               </div>
               <div className="field">
                 <label>Tipo</label>
-                <select className="select" value={token.type} onChange={e => updateToken(index, { type: Number(e.target.value) })} disabled={!isDraft}>
+                <select className="select" value={token.type} onChange={e => changeTokenType(index, Number(e.target.value))} disabled={!isDraft}>
                   <option value={0}>Bearer</option>
-                  <option value={1}>API key</option>
+                  <option value={1}>Header customizado / API key</option>
                 </select>
+                <div className="section-copy" style={{ marginTop: 8 }}>
+                  {token.type === 0
+                    ? "Envia automaticamente no formato Authorization: Bearer SEU_TOKEN."
+                    : "Use para headers como Riosoft-Token, X-API-Key ou outro nome exigido pela API."}
+                </div>
               </div>
               <div className="field">
                 <label>Header</label>
-                <input className="input" placeholder="Authorization ou X-API-Key" value={token.headerName ?? ""} onChange={e => updateToken(index, { headerName: e.target.value })} disabled={!isDraft} />
+                <input
+                  className="input"
+                  placeholder={token.type === 0 ? "Authorization" : "Riosoft-Token, X-API-Key..."}
+                  value={token.headerName ?? ""}
+                  onChange={e => updateToken(index, { headerName: e.target.value })}
+                  disabled={!isDraft || token.type === 0}
+                />
+                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {token.type === 0 && <button className="btn btn-ghost" type="button" disabled>
+                    {tokenTypeLabel(token.type)} usa Authorization
+                  </button>}
+                  {token.type === 1 && <>
+                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => applyTokenHeaderPreset(index, "Riosoft-Token")}>
+                      Usar Riosoft-Token
+                    </button>
+                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => applyTokenHeaderPreset(index, "riosoft-token")}>
+                      Usar riosoft-token
+                    </button>
+                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => applyTokenHeaderPreset(index, "X-API-Key")}>
+                      Usar X-API-Key
+                    </button>
+                  </>}
+                </div>
               </div>
               <div className="field">
                 <label>Valor</label>
@@ -1487,6 +1581,46 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                   {tokens.map((token, index) => <option key={`${token.id ?? "new"}-${index}`} value={token.name}>{token.name || `Token ${index + 1}`}</option>)}
                 </select>
               </div>
+              <div className="field span2">
+                <label>Headers adicionais</label>
+                <div className="section-copy" style={{ marginBottom: 10 }}>
+                  Use para enviar cabecalhos como <code>Riosoft-Token</code>, <code>LocalConnection</code>, <code>X-Requested-With</code> e <code>Accept</code>. <code>Content-Type</code> ja vai como JSON automaticamente.
+                </div>
+                <div className="builder">
+                  {currentHeaders.length === 0 && <div className="empty compact">Nenhum header adicional nesta etapa.</div>}
+                  {currentHeaders.map((header, headerIndex) =>
+                    <div className="field-block" key={`request-header-${headerIndex}`}>
+                      <div className="builder-row" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                        <input
+                          className="input"
+                          style={{ minWidth: 220 }}
+                          placeholder="Nome do header"
+                          value={header.name}
+                          onChange={e => updateRequestHeader(headerIndex, { name: e.target.value })}
+                          disabled={!isDraft}
+                        />
+                        <input
+                          className="input"
+                          style={{ minWidth: 280 }}
+                          placeholder="Valor fixo ou {{placeholder}}"
+                          value={header.value}
+                          onChange={e => updateRequestHeader(headerIndex, { value: e.target.value })}
+                          disabled={!isDraft}
+                        />
+                        <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => removeRequestHeader(headerIndex)}>
+                          <Trash2 size={15} />
+                          Remover
+                        </button>
+                      </div>
+                    </div>)}
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={addRequestHeader}>
+                    <Plus size={14} />
+                    Adicionar header
+                  </button>
+                </div>
+              </div>
               {currentStep.type === 5 &&
                 <div className="field span2">
                   <label>Template da consulta</label>
@@ -1608,12 +1742,30 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                 </button>}
               >
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                  <button className="btn btn-ghost" type="button" disabled={!isDraft || availableIntegrationFields.length === 0} onClick={buildBodyTemplateFromSelectedFields}>
+                    Gerar template JSON
+                  </button>
                   <button className="btn btn-ghost" type="button" disabled={!isDraft || availableIntegrationFields.length === 0} onClick={buildBodyMappingsFromSelectedFields}>
                     Gerar pelos campos selecionados
                   </button>
                 </div>
 
-                {currentBodyMappings.length === 0 && <div className="empty compact">Sem body customizado. Nesse caso, o sistema usa os campos selecionados acima.</div>}
+                <div className="field" style={{ marginTop: 14 }}>
+                  <label>Template JSON livre</label>
+                  <textarea
+                    className="textarea"
+                    placeholder={"{\n  \"FormName\": \"movEstq\",\n  \"Filter\": \"Numero Like '%{{numero}}%'\"\n}"}
+                    value={currentBodyTemplate}
+                    onChange={e => updateApiConfig(editingStep, { bodyTemplate: e.target.value })}
+                    disabled={!isDraft}
+                    style={{ minHeight: 220, fontFamily: "monospace" }}
+                  />
+                  <div className="section-copy" style={{ marginTop: 8 }}>
+                    Se preencher aqui, este JSON tem prioridade sobre o mapeamento abaixo. Voce pode misturar valores fixos com placeholders de etapas anteriores.
+                  </div>
+                </div>
+
+                {currentBodyMappings.length === 0 && !currentBodyTemplate.trim() && <div className="empty compact">Sem body customizado. Nesse caso, o sistema usa os campos selecionados acima.</div>}
 
                 {currentBodyMappings.length > 0 && <div className="builder">
                   {currentBodyMappings.map((mapping, mappingIndex) =>

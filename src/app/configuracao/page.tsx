@@ -163,23 +163,24 @@ export default function Configuration() {
                 <div className="field-block" key={bucket.id ?? `bucket-${index}`}>
                   <div className="bucket-row">
                     <div className="bucket-fields">
-                    <input className="input" style={{ minWidth: 180 }} placeholder="Nome lógico" value={bucket.name} onChange={e => updateBucket(index, { name: e.target.value })} />
-                    <div className="bucket-fields">
-                      <input className="input" style={{ minWidth: 180 }} placeholder="Nome lÃ³gico" value={bucket.name} onChange={e => updateBucket(index, { name: e.target.value })} />
+                      <input className="input" placeholder="Nome lógico" value={bucket.name} onChange={e => updateBucket(index, { name: e.target.value })} />
                       <input className="input" placeholder="bucket-name" value={bucket.bucketName} onChange={e => updateBucket(index, { bucketName: e.target.value.toLowerCase() })} />
-                    <input className="input" style={{ minWidth: 220 }} placeholder="Descrição" value={bucket.description ?? ""} onChange={e => updateBucket(index, { description: e.target.value })} />
-                    <label className="toggle-line compact">
-                      <input type="checkbox" checked={bucket.active} onChange={e => updateBucket(index, { active: e.target.checked })} />
-                      Ativo
-                    </label>
-                    <label className="toggle-line compact">
-                      <input type="radio" name="default-bucket" checked={bucket.isDefault} onChange={() => updateBucket(index, { isDefault: true })} />
-                      Bucket padrão
-                    </label>
-                    <button className="btn btn-ghost" type="button" onClick={() => removeBucket(index)}>
-                      <Trash2 size={15} />
-                      Remover
-                    </button>
+                      <input className="input" placeholder="Descrição" value={bucket.description ?? ""} onChange={e => updateBucket(index, { description: e.target.value })} />
+                    </div>
+                    <div className="bucket-actions">
+                      <label className="toggle-line compact">
+                        <input type="checkbox" checked={bucket.active} onChange={e => updateBucket(index, { active: e.target.checked })} />
+                        Ativo
+                      </label>
+                      <label className="toggle-line compact">
+                        <input type="radio" name="default-bucket" checked={bucket.isDefault} onChange={() => updateBucket(index, { isDefault: true })} />
+                        Bucket padrão
+                      </label>
+                      <button className="btn btn-ghost bucket-remove" type="button" onClick={() => removeBucket(index)}>
+                        <Trash2 size={15} />
+                        Remover
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -215,3 +216,4 @@ export default function Configuration() {
     </div>
   </>;
 }
+
