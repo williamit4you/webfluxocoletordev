@@ -6,3 +6,10 @@
 .bucket-remove{white-space:nowrap;padding-inline:10px}
 @media(max-width:1200px){.bucket-row{grid-template-columns:1fr}.bucket-actions{justify-content:flex-start}}
 @media(max-width:760px){.bucket-fields{grid-template-columns:1fr}.bucket-actions{flex-direction:column;align-items:flex-start}.bucket-remove{padding-inline:0}}
+.preview-block{margin-top:8px}
+.preview-block-title{margin:8px 0 6px}
+.preview-shell{border:1px solid #dbe5df;border-radius:12px;background:#f8fbf9;overflow:hidden}
+.preview-content{margin:0;padding:12px 14px;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.55;overflow:auto}
+.preview-content.collapsed{max-height:220px}
+.preview-content.expanded{max-height:640px}
+.preview-toggle{margin-top:6px;padding-left:0}
