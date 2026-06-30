@@ -1630,11 +1630,9 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                 <div className="field span2">
                   <label>Regra do retorno</label>
                   <div className="section-copy" style={{ marginBottom: 10 }}>
-                    {currentStep.type === 5
-                      ? <>Defina o que a etapa deve fazer quando a API responder <code>200 OK</code> com lista vazia <code>[]</code>. Se vier array com itens, o fluxo continua normalmente com o mapeamento configurado.</>
-                      : <>Defina como o fluxo interpreta o retorno desta chamada. Para <code>API envio</code>, o comportamento padrao e avancar quando a chamada retornar <code>200 OK</code>. Se voce precisar insistir ate receber um array com conteudo, use uma etapa <code>API consulta</code> na sequencia.</>}
+                    Defina o que a etapa deve fazer quando a API responder <code>200 OK</code> com lista vazia <code>[]</code>. Se vier array com itens, o fluxo continua normalmente com o mapeamento configurado.
                   </div>
-                  {currentStep.type === 5 && <div className="schedule-chip-row">
+                  <div className="schedule-chip-row">
                     <button
                       className={`btn ${(currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "advance" ? "btn-primary" : "btn-ghost"}`}
                       type="button"
@@ -1660,28 +1658,18 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                       Continuar consultando
                     </button>
                   </div>}
-                  {currentStep.type === 4 && <div className="schedule-chip-row">
-                    <button className="btn btn-primary" type="button" disabled>
-                      Avancar com 200 OK
-                    </button>
-                    <button className="btn btn-ghost" type="button" disabled>
-                      Reconsultar use API consulta
-                    </button>
-                  </div>}
                 </div>
                 <div className="field span2">
                   <div className={`schedule-guide-card ${currentStep.type === 5 && (currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "retry" ? "active" : ""}`}>
                     <strong>Comportamento esperado</strong>
                     <p>
-                      {currentStep.type === 5
-                        ? ((currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "retry"
-                          ? "Se a resposta vier como [], a etapa fica em andamento e o sistema faz novas consultas automaticamente ate receber um retorno com conteudo."
-                          : "Se a resposta vier como [], a etapa sera considerada concluida e o fluxo avanca sem aguardar novos dados.")
-                        : "O retorno desta etapa pode preencher variaveis pelo mapeamento da resposta. A etapa avanca assim que a chamada retornar sucesso tecnico. Para esperar um retorno cheio antes de seguir, encadeie uma API consulta depois do envio."}
+                      {(currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "retry"
+                        ? `Se a resposta vier como [], a etapa ${currentStep.type === 4 ? "refaz o POST" : "refaz a consulta"} automaticamente ate receber um retorno com conteudo.`
+                        : "Se a resposta vier como [], a etapa sera considerada concluida e o fluxo avanca sem aguardar novos dados."}
                     </p>
                   </div>
                 </div>
-                {currentStep.type === 5 && (currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "retry" && <div className="field">
+                {(currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "retry" && <div className="field">
                   <label>Nova tentativa a cada (minutos)</label>
                   <input
                     className="input"
