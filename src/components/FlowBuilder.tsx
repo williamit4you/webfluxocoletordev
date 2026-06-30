@@ -1817,7 +1817,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                 </div>}
               </AccordionSection>}
 
-              {currentStep.type === 5 && currentStep.fields.length > 0 && <AccordionSection
+              {(currentStep.type === 4 || currentStep.type === 5) && currentStep.fields.length > 0 && <AccordionSection
                 title="Mapeamento da resposta da API"
                 description="Defina qual propriedade do JSON retornado preenche cada campo desta etapa. Exemplo ViaCEP: logradouro, bairro, localidade, uf."
                 open={openSections.responseMapping}
