@@ -140,10 +140,16 @@ function createRequestHeader(): RequestHeader {
 function createResponseRule(): ResponseRule {
   return {
     enabled: false,
+    mode: "emptyCheck",
     targetPath: "$",
     expectedType: "array",
     emptyBehavior: "advance",
     nonEmptyBehavior: "advance",
+    operator: "equals",
+    expectedValue: "",
+    caseSensitive: false,
+    onMatchBehavior: "advance",
+    onMismatchBehavior: "retry",
     retryIntervalMinutes: 3,
     maxAttempts: 20,
     failureBehavior: "fail",
@@ -157,7 +163,10 @@ function normalizeResponseRule(config?: StepApiConfig | null): ResponseRule {
     ...createResponseRule(),
     ...config?.responseRule,
     enabled: config?.responseRule?.enabled ?? legacyRetry,
+    mode: config?.responseRule?.mode ?? "emptyCheck",
     emptyBehavior: config?.responseRule?.emptyBehavior ?? config?.emptyArrayAction ?? (legacyRetry ? "retry" : "advance"),
+    onMatchBehavior: config?.responseRule?.onMatchBehavior ?? config?.responseRule?.nonEmptyBehavior ?? "advance",
+    onMismatchBehavior: config?.responseRule?.onMismatchBehavior ?? config?.responseRule?.emptyBehavior ?? config?.emptyArrayAction ?? (legacyRetry ? "retry" : "advance"),
     retryIntervalMinutes: config?.responseRule?.retryIntervalMinutes ?? config?.emptyArrayRetryMinutes ?? 3
   };
 }
@@ -172,6 +181,20 @@ function describeResponseRule(rule: ResponseRule, stepType: number) {
   const maxAttempts = rule.maxAttempts ?? 20;
   const requestName = stepType === 4 ? "POST" : "consulta";
 
+  if (rule.mode === "condition") {
+    const operatorLabel = conditionOperatorLabel(rule.operator ?? "equals").toLowerCase();
+    const expectedValue = rule.operator === "isEmpty" || rule.operator === "isNotEmpty"
+      ? ""
+      : ` "${rule.expectedValue ?? ""}"`;
+    const mismatch = rule.onMismatchBehavior === "retry"
+      ? `manter a etapa em andamento e refazer o ${requestName} a cada ${retryMinutes} minuto(s), no maximo ${maxAttempts} tentativa(s)`
+      : rule.onMismatchBehavior === "fail"
+        ? "marcar a etapa como falha"
+        : "avancar mesmo assim";
+
+    return `Se ${targetPath} for ${operatorLabel}${expectedValue}, mapear a resposta e avancar. Se nao atender, ${mismatch}.`;
+  }
+
   if (rule.emptyBehavior === "retry") {
     return `Se ${targetPath} estiver vazio, manter a etapa em andamento e refazer o ${requestName} a cada ${retryMinutes} minuto(s), no maximo ${maxAttempts} tentativa(s). Se tiver conteudo, mapear e avancar.`;
   }
@@ -181,6 +204,55 @@ function describeResponseRule(rule: ResponseRule, stepType: number) {
   }
 
   return `Se ${targetPath} estiver vazio, aceitar o retorno e avancar. Se tiver conteudo, mapear e avancar.`;
+}
+
+const conditionOperatorOptions: Record<string, { value: string; label: string }[]> = {
+  string: [
+    { value: "equals", label: "Igual a" },
+    { value: "notEquals", label: "Diferente de" },
+    { value: "contains", label: "Contem" },
+    { value: "notContains", label: "Nao contem" },
+    { value: "startsWith", label: "Comeca com" },
+    { value: "endsWith", label: "Termina com" },
+    { value: "isEmpty", label: "Esta vazio" },
+    { value: "isNotEmpty", label: "Esta preenchido" }
+  ],
+  number: [
+    { value: "equals", label: "Igual a" },
+    { value: "notEquals", label: "Diferente de" },
+    { value: "greaterThan", label: "Maior que" },
+    { value: "greaterThanOrEqual", label: "Maior ou igual a" },
+    { value: "lessThan", label: "Menor que" },
+    { value: "lessThanOrEqual", label: "Menor ou igual a" },
+    { value: "isEmpty", label: "Esta vazio" },
+    { value: "isNotEmpty", label: "Esta preenchido" }
+  ],
+  boolean: [
+    { value: "equals", label: "Igual a" },
+    { value: "notEquals", label: "Diferente de" },
+    { value: "isEmpty", label: "Esta vazio" },
+    { value: "isNotEmpty", label: "Esta preenchido" }
+  ],
+  array: [
+    { value: "isEmpty", label: "Esta vazio" },
+    { value: "isNotEmpty", label: "Esta preenchido" }
+  ],
+  object: [
+    { value: "isEmpty", label: "Esta vazio" },
+    { value: "isNotEmpty", label: "Esta preenchido" }
+  ],
+  any: [
+    { value: "isEmpty", label: "Esta vazio" },
+    { value: "isNotEmpty", label: "Esta preenchido" }
+  ]
+};
+
+function conditionOperatorLabel(value: string) {
+  return Object.values(conditionOperatorOptions).flat().find(option => option.value === value)?.label ?? value;
+}
+
+function conditionOperatorsForType(expectedType?: string | null) {
+  return conditionOperatorOptions[expectedType ?? "string"] ?? conditionOperatorOptions.string;
 }
 
 function normalizeBodyTargetKey(value: string) {
@@ -554,17 +626,75 @@ function ResponseRuleEditor({
   onChange: (patch: Partial<StepApiConfig>) => void;
 }) {
   const rule = normalizeResponseRule(config);
+  const isCondition = rule.mode === "condition";
+  const conditionOperators = conditionOperatorsForType(rule.expectedType);
+  const operatorNeedsValue = rule.operator !== "isEmpty" && rule.operator !== "isNotEmpty";
+  const needsRetryFields = isCondition
+    ? rule.onMismatchBehavior === "retry" || rule.onMatchBehavior === "retry"
+    : rule.emptyBehavior === "retry" || rule.nonEmptyBehavior === "retry";
 
   function patchRule(patch: Partial<ResponseRule>) {
     const nextRule = { ...rule, ...patch };
     onChange({
       responseRule: nextRule,
-      retryOnEmptyArray: nextRule.enabled && nextRule.emptyBehavior === "retry",
-      emptyArrayAction: nextRule.emptyBehavior ?? "advance",
-      emptyArrayRetryMinutes: nextRule.enabled && nextRule.emptyBehavior === "retry"
+      retryOnEmptyArray: nextRule.enabled && nextRule.mode !== "condition" && nextRule.emptyBehavior === "retry",
+      emptyArrayAction: nextRule.mode === "condition" ? "advance" : nextRule.emptyBehavior ?? "advance",
+      emptyArrayRetryMinutes: nextRule.enabled && nextRule.mode !== "condition" && nextRule.emptyBehavior === "retry"
         ? nextRule.retryIntervalMinutes ?? 3
         : null
     });
+  }
+
+  function changeRuleMode(mode: string) {
+    if (mode === "condition") {
+      patchRule({
+        mode,
+        targetPath: "$[0].Status",
+        expectedType: "string",
+        operator: "equals",
+        expectedValue: "Concluido",
+        caseSensitive: false,
+        onMatchBehavior: "advance",
+        onMismatchBehavior: "retry",
+        retryIntervalMinutes: rule.retryIntervalMinutes ?? 3,
+        maxAttempts: rule.maxAttempts ?? 20,
+        description: rule.description || "Aguardar o Status ficar Concluido antes de avancar."
+      });
+      return;
+    }
+
+    patchRule({
+      mode,
+      targetPath: "$",
+      expectedType: "array",
+      emptyBehavior: rule.emptyBehavior ?? "advance",
+      nonEmptyBehavior: "advance"
+    });
+  }
+
+  function applyStatusExample() {
+    patchRule({
+      enabled: true,
+      mode: "condition",
+      targetPath: "$[0].Status",
+      expectedType: "string",
+      operator: "equals",
+      expectedValue: "Concluido",
+      caseSensitive: false,
+      onMatchBehavior: "advance",
+      onMismatchBehavior: "retry",
+      retryIntervalMinutes: 3,
+      maxAttempts: 20,
+      description: "Aguardar o Status ficar Concluido antes de avancar."
+    });
+  }
+
+  function updateExpectedType(expectedType: string) {
+    const operators = conditionOperatorsForType(expectedType);
+    const nextOperator = operators.some(option => option.value === rule.operator)
+      ? rule.operator
+      : operators[0].value;
+    patchRule({ expectedType, operator: nextOperator });
   }
 
   return (
@@ -576,14 +706,29 @@ function ResponseRuleEditor({
         </label>
       </div>
 
-      <div className="field">
-        <label>Caminho analisado</label>
-        <input className="input" placeholder="$ ou data.items" value={rule.targetPath ?? "$"} onChange={e => patchRule({ targetPath: e.target.value })} disabled={!isDraft || !rule.enabled} />
+      <div className="field span2">
+        <label>Tipo de regra</label>
+        <div className="schedule-chip-row">
+          <button className={`btn ${!isCondition ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft || !rule.enabled} onClick={() => changeRuleMode("emptyCheck")}>
+            Vazio/conteudo
+          </button>
+          <button className={`btn ${isCondition ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft || !rule.enabled} onClick={() => changeRuleMode("condition")}>
+            Condicao por valor
+          </button>
+          <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={applyStatusExample}>
+            Exemplo Status concluido
+          </button>
+        </div>
       </div>
 
       <div className="field">
-        <label>Tipo esperado</label>
-        <select className="select" value={rule.expectedType ?? "array"} onChange={e => patchRule({ expectedType: e.target.value })} disabled={!isDraft || !rule.enabled}>
+        <label>Caminho analisado</label>
+        <input className="input" placeholder={isCondition ? "$[0].Status" : "$ ou data.items"} value={rule.targetPath ?? "$"} onChange={e => patchRule({ targetPath: e.target.value })} disabled={!isDraft || !rule.enabled} />
+      </div>
+
+      <div className="field">
+        <label>{isCondition ? "Tipo do valor" : "Tipo esperado"}</label>
+        <select className="select" value={rule.expectedType ?? "array"} onChange={e => updateExpectedType(e.target.value)} disabled={!isDraft || !rule.enabled}>
           <option value="array">Array</option>
           <option value="object">Objeto</option>
           <option value="string">Texto</option>
@@ -593,22 +738,77 @@ function ResponseRuleEditor({
         </select>
       </div>
 
-      <div className="field span2">
-        <label>Se estiver vazio</label>
-        <div className="schedule-chip-row">
-          <button className={`btn ${rule.emptyBehavior === "advance" ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft || !rule.enabled} onClick={() => patchRule({ emptyBehavior: "advance" })}>
-            Avancar
-          </button>
-          <button className={`btn ${rule.emptyBehavior === "retry" ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft || !rule.enabled} onClick={() => patchRule({ emptyBehavior: "retry", retryIntervalMinutes: rule.retryIntervalMinutes ?? 3, maxAttempts: rule.maxAttempts ?? 20 })}>
-            Tentar novamente
-          </button>
-          <button className={`btn ${rule.emptyBehavior === "fail" ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft || !rule.enabled} onClick={() => patchRule({ emptyBehavior: "fail" })}>
-            Falhar
-          </button>
-        </div>
-      </div>
+      {isCondition ? (
+        <>
+          <div className="field">
+            <label>Operador</label>
+            <select className="select" value={rule.operator ?? conditionOperators[0].value} onChange={e => patchRule({ operator: e.target.value })} disabled={!isDraft || !rule.enabled}>
+              {conditionOperators.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </div>
+          {operatorNeedsValue && (
+            <div className="field">
+              <label>Valor esperado</label>
+              {rule.expectedType === "boolean" ? (
+                <select className="select" value={rule.expectedValue ?? "true"} onChange={e => patchRule({ expectedValue: e.target.value })} disabled={!isDraft || !rule.enabled}>
+                  <option value="true">Verdadeiro</option>
+                  <option value="false">Falso</option>
+                </select>
+              ) : (
+                <input className="input" type={rule.expectedType === "number" ? "number" : "text"} placeholder="Concluido" value={rule.expectedValue ?? ""} onChange={e => patchRule({ expectedValue: e.target.value })} disabled={!isDraft || !rule.enabled} />
+              )}
+            </div>
+          )}
+          <div className="field span2">
+            <label className="toggle-line">
+              <input type="checkbox" checked={rule.caseSensitive ?? false} onChange={e => patchRule({ caseSensitive: e.target.checked })} disabled={!isDraft || !rule.enabled || rule.expectedType !== "string"} />
+              Diferenciar maiusculas e minusculas
+            </label>
+          </div>
+          <div className="field">
+            <label>Se atender a condicao</label>
+            <select className="select" value={rule.onMatchBehavior ?? "advance"} onChange={e => patchRule({ onMatchBehavior: e.target.value })} disabled={!isDraft || !rule.enabled}>
+              <option value="advance">Mapear resposta e avancar</option>
+              <option value="fail">Falhar</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Se nao atender</label>
+            <select className="select" value={rule.onMismatchBehavior ?? "retry"} onChange={e => patchRule({ onMismatchBehavior: e.target.value, retryIntervalMinutes: e.target.value === "retry" ? rule.retryIntervalMinutes ?? 3 : rule.retryIntervalMinutes, maxAttempts: e.target.value === "retry" ? rule.maxAttempts ?? 20 : rule.maxAttempts })} disabled={!isDraft || !rule.enabled}>
+              <option value="retry">Tentar novamente</option>
+              <option value="advance">Avancar</option>
+              <option value="fail">Falhar</option>
+            </select>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="field span2">
+            <label>Se estiver vazio</label>
+            <div className="schedule-chip-row">
+              <button className={`btn ${rule.emptyBehavior === "advance" ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft || !rule.enabled} onClick={() => patchRule({ emptyBehavior: "advance" })}>
+                Avancar
+              </button>
+              <button className={`btn ${rule.emptyBehavior === "retry" ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft || !rule.enabled} onClick={() => patchRule({ emptyBehavior: "retry", retryIntervalMinutes: rule.retryIntervalMinutes ?? 3, maxAttempts: rule.maxAttempts ?? 20 })}>
+                Tentar novamente
+              </button>
+              <button className={`btn ${rule.emptyBehavior === "fail" ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft || !rule.enabled} onClick={() => patchRule({ emptyBehavior: "fail" })}>
+                Falhar
+              </button>
+            </div>
+          </div>
 
-      {rule.emptyBehavior === "retry" && (
+          <div className="field span2">
+            <label>Quando tiver conteudo</label>
+            <select className="select" value={rule.nonEmptyBehavior ?? "advance"} onChange={e => patchRule({ nonEmptyBehavior: e.target.value })} disabled={!isDraft || !rule.enabled}>
+              <option value="advance">Mapear resposta e avancar</option>
+              <option value="fail">Falhar</option>
+            </select>
+          </div>
+        </>
+      )}
+
+      {needsRetryFields && (
         <>
           <div className="field">
             <label>Nova tentativa a cada (min)</label>
@@ -622,16 +822,8 @@ function ResponseRuleEditor({
       )}
 
       <div className="field span2">
-        <label>Quando tiver conteudo</label>
-        <select className="select" value={rule.nonEmptyBehavior ?? "advance"} onChange={e => patchRule({ nonEmptyBehavior: e.target.value })} disabled={!isDraft || !rule.enabled}>
-          <option value="advance">Mapear resposta e avancar</option>
-          <option value="fail">Falhar</option>
-        </select>
-      </div>
-
-      <div className="field span2">
         <label>Descricao operacional</label>
-        <input className="input" placeholder="Ex.: Aguardar retorno do laudo ate a API devolver itens." value={rule.description ?? ""} onChange={e => patchRule({ description: e.target.value })} disabled={!isDraft || !rule.enabled} />
+        <input className="input" placeholder={isCondition ? "Ex.: Aguardar Status igual a Concluido." : "Ex.: Aguardar retorno do laudo ate a API devolver itens."} value={rule.description ?? ""} onChange={e => patchRule({ description: e.target.value })} disabled={!isDraft || !rule.enabled} />
       </div>
 
       <div className="notice span2">

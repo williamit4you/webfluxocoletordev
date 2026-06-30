@@ -278,6 +278,16 @@ function formatTechnicalDataLabel(key: string) {
       return "Caminho avaliado";
     case "_integration.responseRule.expectedType":
       return "Tipo esperado";
+    case "_integration.responseRule.mode":
+      return "Tipo de regra";
+    case "_integration.responseRule.operator":
+      return "Operador";
+    case "_integration.responseRule.actualValue":
+      return "Valor atual";
+    case "_integration.responseRule.expectedValue":
+      return "Valor esperado";
+    case "_integration.responseRule.matched":
+      return "Condicao atendida";
     case "_integration.responseRule.retryIntervalMinutes":
       return "Nova tentativa a cada (min)";
     case "_integration.responseRule.attemptCount":
@@ -845,6 +855,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     const attemptCount = toText(step.data["_integration.responseRule.attemptCount"]);
     const maxAttempts = toText(step.data["_integration.responseRule.maxAttempts"]);
     const emptyResultRetryMinutes = toText(step.data["_integration.responseRule.retryIntervalMinutes"]) || toText(step.data["_integration.emptyResultRetryMinutes"]);
+    const ruleMode = toText(step.data["_integration.responseRule.mode"]);
+    const actualValue = toText(step.data["_integration.responseRule.actualValue"]);
+    const expectedValue = toText(step.data["_integration.responseRule.expectedValue"]);
 
     return (
       <div style={{ marginTop: 14, paddingLeft: 38 }}>
@@ -869,13 +882,19 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
         {isAwaitingData && (
           <div className="notice" style={{ marginBottom: 16 }}>
-            <strong>Consulta aguardando retorno com conteudo</strong>
+            <strong>{ruleMode === "condition" ? "Consulta aguardando condicao da API" : "Consulta aguardando retorno com conteudo"}</strong>
             <div style={{ marginTop: 8 }}>
               {awaitingDataMessage || "A API respondeu com lista vazia e o sistema continuara tentando automaticamente."}
             </div>
+            {(actualValue || expectedValue) && (
+              <div className="section-copy" style={{ marginTop: 6 }}>
+                {actualValue ? `Valor atual: ${actualValue}. ` : ""}
+                {expectedValue ? `Esperado: ${expectedValue}.` : ""}
+              </div>
+            )}
             {emptyResultRetryMinutes && (
               <div className="section-copy" style={{ marginTop: 6 }}>
-                Nova consulta prevista a cada {emptyResultRetryMinutes} minuto(s) enquanto o retorno permanecer vazio.
+                Nova consulta prevista a cada {emptyResultRetryMinutes} minuto(s).
               </div>
             )}
             {(attemptCount || maxAttempts || nextAttemptAt) && (
