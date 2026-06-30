@@ -23,7 +23,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   return <div className="app">
     <aside className="sidebar">
-      <Link href="/" className="brand"><span className="brandmark"><Activity size={19} /></span>FlowTrack</Link>
+      <Link href="/" className="brand"><span className="brandmark"><Activity size={19} /></span>It4you Track</Link>
       <div className="nav-label">Operação</div>
       <nav className="nav">
         {items

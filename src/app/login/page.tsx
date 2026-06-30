@@ -44,7 +44,7 @@ export default function Login() {
           <span className="brandmark">
             <Activity />
           </span>
-          FlowTrack
+          It4you Track
         </div>
 
         <h1>Do portão à produção, tudo sob controle.</h1>
