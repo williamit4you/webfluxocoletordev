@@ -260,6 +260,10 @@ function formatTechnicalDataLabel(key: string) {
       return "Resposta";
     case "_integration.errorMessage":
       return "Erro";
+    case "_integration.mappingWarning":
+      return "Aviso do mapeamento";
+    case "_integration.mappingResult":
+      return "Resultado do mapeamento";
     default:
       return key.replace("_integration.", "");
   }
