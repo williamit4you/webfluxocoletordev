@@ -2,7 +2,7 @@
 
 import { api } from "@/lib/api";
 import type { ExecutionField, FieldOption, Flow, Instance, StepApiConfig } from "@/lib/types";
-import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Paperclip, Play, RotateCw, Save } from "lucide-react";
+import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Paperclip, Play, RotateCw, Save, Square } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
@@ -735,6 +735,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const [advancing, setAdvancing] = useState(false);
   const [uploadingFieldKey, setUploadingFieldKey] = useState("");
   const [reprocessingStepId, setReprocessingStepId] = useState("");
+  const [cancelingStepId, setCancelingStepId] = useState("");
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
   const [journeyView, setJourneyView] = useState<"timeline" | "diagram">("timeline");
   const [readerWarning, setReaderWarning] = useState("");
@@ -801,6 +802,31 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     return isCurrentAutomatic || isCompletedIntegration;
   }
 
+  function isStepAwaitingData(step: Instance["steps"][number]) {
+    const ruleStatus = toText(step.data["_integration.responseRule.status"]);
+    return ruleStatus === "waiting" || step.data["_integration.awaitingData"] === true || toText(step.data["_integration.awaitingData"]).toLowerCase() === "true";
+  }
+
+  function canCancelWaitingStep(step: Instance["steps"][number]) {
+    return step.isAutomatic && step.status === 1 && isStepAwaitingData(step);
+  }
+
+  function getStepStateLabel(step: Instance["steps"][number]) {
+    if (step.status === 2) {
+      return step.completedAt ? `Concluida ${step.completedAt ? new Date(step.completedAt).toLocaleString("pt-BR") : ""}` : "Concluida";
+    }
+
+    if (step.status === 1) {
+      return "Etapa atual";
+    }
+
+    if (step.status === 3) {
+      return "Interrompida";
+    }
+
+    return "Aguardando";
+  }
+
   function toggleStepDetails(stepId: string) {
     setExpandedSteps(current => ({ ...current, [stepId]: !current[stepId] }));
   }
@@ -812,7 +838,8 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   function renderStepDetails(step: Instance["steps"][number]) {
     const technicalData = getAutomaticStepTechnicalData(step);
     const ruleStatus = toText(step.data["_integration.responseRule.status"]);
-    const isAwaitingData = ruleStatus === "waiting" || step.data["_integration.awaitingData"] === true || toText(step.data["_integration.awaitingData"]).toLowerCase() === "true";
+    const isAwaitingData = isStepAwaitingData(step);
+    const isCancelledWaiting = ruleStatus === "cancelled";
     const awaitingDataMessage = toText(step.data["_integration.responseRule.reason"]) || toText(step.data["_integration.awaitingDataMessage"]);
     const nextAttemptAt = toText(step.data["_integration.responseRule.nextAttemptAtUtc"]);
     const attemptCount = toText(step.data["_integration.responseRule.attemptCount"]);
@@ -821,12 +848,22 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
     return (
       <div style={{ marginTop: 14, paddingLeft: 38 }}>
-        {canReprocessStep(step) && (
+        {(canReprocessStep(step) || canCancelWaitingStep(step)) && (
           <div style={{ marginBottom: 16, display: "flex", justifyContent: "flex-end" }}>
-            <button className="btn btn-secondary" type="button" onClick={() => void reprocessStep(step.id)} disabled={reprocessingStepId === step.id}>
-              <RotateCw size={16} />
-              {reprocessingStepId === step.id ? "Reprocessando..." : "Reprocessar etapa"}
-            </button>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {canCancelWaitingStep(step) && (
+                <button className="btn btn-secondary" type="button" onClick={() => void cancelWaitingStep(step.id)} disabled={cancelingStepId === step.id}>
+                  <Square size={16} />
+                  {cancelingStepId === step.id ? "Cancelando..." : "Cancelar tentativas"}
+                </button>
+              )}
+              {canReprocessStep(step) && (
+                <button className="btn btn-secondary" type="button" onClick={() => void reprocessStep(step.id)} disabled={reprocessingStepId === step.id}>
+                  <RotateCw size={16} />
+                  {reprocessingStepId === step.id ? "Reprocessando..." : "Reprocessar etapa"}
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -847,6 +884,15 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 {nextAttemptAt ? `Proxima tentativa: ${nextAttemptAt}.` : ""}
               </div>
             )}
+          </div>
+        )}
+
+        {isCancelledWaiting && (
+          <div className="notice" style={{ marginBottom: 16 }}>
+            <strong>Consulta automatica interrompida manualmente</strong>
+            <div style={{ marginTop: 8 }}>
+              {awaitingDataMessage || "As novas tentativas foram canceladas e esta etapa nao fara novas consultas automaticamente."}
+            </div>
           </div>
         )}
 
@@ -1123,6 +1169,22 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     }
   }
 
+  async function cancelWaitingStep(stepId: string) {
+    setCancelingStepId(stepId);
+    setError("");
+
+    try {
+      const result = await api<Instance>(`/instances/${id}/steps/${stepId}/cancel-waiting`, {
+        method: "POST"
+      });
+      syncCurrentStepState(result, setItem, setFormData, setNotes);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Nao foi possivel cancelar as tentativas automaticas.");
+    } finally {
+      setCancelingStepId("");
+    }
+  }
+
   if (error) {
     return <div className="error">{error}</div>;
   }
@@ -1219,12 +1281,22 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                   </div>
                 </div>
               )}
-              {canReprocessStep(currentStep) && (
+              {(canReprocessStep(currentStep) || canCancelWaitingStep(currentStep)) && (
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button className="btn btn-secondary" type="button" onClick={() => void reprocessStep(currentStep.id)} disabled={reprocessingStepId === currentStep.id}>
-                    <RotateCw size={16} />
-                    {reprocessingStepId === currentStep.id ? "Reprocessando..." : "Reprocessar etapa"}
-                  </button>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {canCancelWaitingStep(currentStep) && (
+                      <button className="btn btn-secondary" type="button" onClick={() => void cancelWaitingStep(currentStep.id)} disabled={cancelingStepId === currentStep.id}>
+                        <Square size={16} />
+                        {cancelingStepId === currentStep.id ? "Cancelando..." : "Cancelar tentativas"}
+                      </button>
+                    )}
+                    {canReprocessStep(currentStep) && (
+                      <button className="btn btn-secondary" type="button" onClick={() => void reprocessStep(currentStep.id)} disabled={reprocessingStepId === currentStep.id}>
+                        <RotateCw size={16} />
+                        {reprocessingStepId === currentStep.id ? "Reprocessando..." : "Reprocessar etapa"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1277,13 +1349,13 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           {journeyView === "timeline" && item.steps.map(step => {
             const expanded = !!expandedSteps[step.id];
             return (
-              <div key={step.id} className={`timeline-row ${step.status === 2 ? "done" : step.status === 1 ? "current" : ""}`} style={{ display: "block" }}>
+              <div key={step.id} className={`timeline-row ${step.status === 2 ? "done" : step.status === 1 ? "current" : step.status === 3 ? "failed" : ""}`} style={{ display: "block" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span className="timeline-dot">{step.status === 2 ? <Check size={14} /> : step.status === 1 ? <Play size={13} /> : <Clock size={13} />}</span>
+                  <span className="timeline-dot">{step.status === 2 ? <Check size={14} /> : step.status === 1 ? <Play size={13} /> : step.status === 3 ? <Square size={13} /> : <Clock size={13} />}</span>
                   <div style={{ flex: 1 }}>
                     <strong>{step.name}</strong>
                     <div className="section-copy" style={{ marginTop: 4 }}>
-                      {step.status === 2 ? `Concluida ${step.completedAt ? new Date(step.completedAt).toLocaleString("pt-BR") : ""}` : step.status === 1 ? "Etapa atual" : "Aguardando"}
+                      {getStepStateLabel(step)}
                     </div>
                     <div className="section-copy" style={{ marginTop: 4 }}>
                       {step.isAutomatic ? "Execucao automatica/sistemica" : `Executado por ${step.completedByName || "usuario nao identificado"}`}
@@ -1307,11 +1379,11 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 <div className="step-diagram-canvas" role="list" aria-label="Jornada do registro em diagrama">
                   {item.steps.map(step => {
                     const expanded = !!expandedSteps[step.id];
-                    const stateLabel = step.status === 2 ? "Concluida" : step.status === 1 ? "Atual" : "Aguardando";
+                    const stateLabel = step.status === 2 ? "Concluida" : step.status === 1 ? "Atual" : step.status === 3 ? "Interrompida" : "Aguardando";
                     const actorLabel = step.isAutomatic ? "Execucao automatica/sistemica" : `Executado por ${step.completedByName || "usuario nao identificado"}`;
 
                     return (
-                      <div key={step.id} className={`diagram-node ${step.status === 1 ? "active" : ""}`} role="listitem">
+                      <div key={step.id} className={`diagram-node ${step.status === 1 ? "active" : step.status === 3 ? "failed" : ""}`} role="listitem">
                         <button className="diagram-node-card" type="button" onClick={() => toggleJourneyDiagramDetails(step.id)}>
                           <div className="diagram-node-top">
                             <span className="step-chip">{step.order}</span>
@@ -1348,7 +1420,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                           ? `Concluida ${selectedJourneyStep.completedAt ? new Date(selectedJourneyStep.completedAt).toLocaleString("pt-BR") : ""}`
                           : selectedJourneyStep.status === 1
                             ? "Etapa atual em execucao."
-                            : "Etapa aguardando liberacao."}
+                            : selectedJourneyStep.status === 3
+                              ? "Etapa interrompida manualmente."
+                              : "Etapa aguardando liberacao."}
                       </p>
                     </div>
                     <button className="btn btn-ghost" type="button" onClick={() => toggleJourneyDiagramDetails(selectedJourneyStep.id)}>
