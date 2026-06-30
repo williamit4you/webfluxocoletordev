@@ -27,6 +27,10 @@ function toText(value: unknown) {
 }
 
 function formatPreviewContent(value: unknown) {
+  if (value && typeof value === "object") {
+    return JSON.stringify(value, null, 2);
+  }
+
   const text = toText(value).trim();
   if (!text) {
     return "-";
@@ -260,6 +264,12 @@ function formatTechnicalDataLabel(key: string) {
       return "Resposta";
     case "_integration.errorMessage":
       return "Erro";
+    case "_integration.awaitingData":
+      return "Aguardando retorno com conteudo";
+    case "_integration.awaitingDataMessage":
+      return "Status da consulta";
+    case "_integration.emptyResultRetryMinutes":
+      return "Nova consulta a cada (min)";
     case "_integration.mappingWarning":
       return "Aviso do mapeamento";
     case "_integration.mappingResult":
@@ -785,6 +795,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
   function renderStepDetails(step: Instance["steps"][number]) {
     const technicalData = getAutomaticStepTechnicalData(step);
+    const isAwaitingData = step.data["_integration.awaitingData"] === true || toText(step.data["_integration.awaitingData"]).toLowerCase() === "true";
+    const awaitingDataMessage = toText(step.data["_integration.awaitingDataMessage"]);
+    const emptyResultRetryMinutes = toText(step.data["_integration.emptyResultRetryMinutes"]);
 
     return (
       <div style={{ marginTop: 14, paddingLeft: 38 }}>
@@ -794,6 +807,20 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
               <RotateCw size={16} />
               {reprocessingStepId === step.id ? "Reprocessando..." : "Reprocessar etapa"}
             </button>
+          </div>
+        )}
+
+        {isAwaitingData && (
+          <div className="notice" style={{ marginBottom: 16 }}>
+            <strong>Consulta aguardando retorno com conteudo</strong>
+            <div style={{ marginTop: 8 }}>
+              {awaitingDataMessage || "A API respondeu com lista vazia e o sistema continuara tentando automaticamente."}
+            </div>
+            {emptyResultRetryMinutes && (
+              <div className="section-copy" style={{ marginTop: 6 }}>
+                Nova consulta prevista a cada {emptyResultRetryMinutes} minuto(s) enquanto o retorno permanecer vazio.
+              </div>
+            )}
           </div>
         )}
 
@@ -864,7 +891,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
               {technicalData.map(([key, value]) => (
                 <div className="data-item" key={`${step.id}-${key}`}>
                   <small>{formatTechnicalDataLabel(key)}</small>
-                  {key === "_integration.responsePreview" || key === "_integration.requestHeaders" || key === "_integration.requestBody" ? (
+                  {key === "_integration.responsePreview" || key === "_integration.requestHeaders" || key === "_integration.requestBody" || key === "_integration.mappingResult" ? (
                     <PreviewBlock value={value} />
                   ) : (
                     <strong>{toText(value) || "-"}</strong>

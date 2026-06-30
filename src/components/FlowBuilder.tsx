@@ -102,7 +102,7 @@ function createField(): Field {
 }
 
 function createApiConfig(): StepApiConfig {
-  return { validateTls: true, method: "GET", scheduleMode: "manual", sendFieldKeys: [], responseMappings: [], bodyMappings: [], headers: [], bodyTemplate: "" };
+  return { validateTls: true, method: "GET", scheduleMode: "manual", sendFieldKeys: [], responseMappings: [], bodyMappings: [], headers: [], bodyTemplate: "", retryOnEmptyArray: false, emptyArrayRetryMinutes: 3 };
 }
 
 function createStep(name = ""): Step {
@@ -1626,6 +1626,40 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                   <label>Template da consulta</label>
                   <input className="input" placeholder="Ex.: ?id={{chaveAcesso}}" value={currentStep.apiConfig?.queryTemplate ?? ""} onChange={e => updateApiConfig(editingStep, { queryTemplate: e.target.value })} disabled={!isDraft} />
                 </div>}
+              {currentStep.type === 5 && <>
+                <div className="field span2">
+                  <label className="toggle-line">
+                    <input
+                      type="checkbox"
+                      checked={currentStep.apiConfig?.retryOnEmptyArray ?? false}
+                      onChange={e => updateApiConfig(editingStep, {
+                        retryOnEmptyArray: e.target.checked,
+                        emptyArrayRetryMinutes: e.target.checked ? (currentStep.apiConfig?.emptyArrayRetryMinutes ?? 3) : null
+                      })}
+                      disabled={!isDraft}
+                    />
+                    Continuar consultando quando a API responder lista vazia <code>[]</code>
+                  </label>
+                  <div className="section-copy" style={{ marginTop: 8 }}>
+                    Quando a consulta retornar <code>200 OK</code> com <code>[]</code>, a etapa permanece em andamento e o sistema tenta novamente ate receber um array com conteudo.
+                  </div>
+                </div>
+                {(currentStep.apiConfig?.retryOnEmptyArray ?? false) && <div className="field">
+                  <label>Nova tentativa a cada (minutos)</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min={1}
+                    max={10080}
+                    value={currentStep.apiConfig?.emptyArrayRetryMinutes ?? 3}
+                    onChange={e => updateApiConfig(editingStep, { emptyArrayRetryMinutes: Math.max(1, Number(e.target.value) || 1) })}
+                    disabled={!isDraft}
+                  />
+                  <div className="section-copy" style={{ marginTop: 8 }}>
+                    Exemplo: informe <code>3</code> para repetir a consulta a cada 3 minutos enquanto o retorno estiver vazio.
+                  </div>
+                </div>}
+              </>}
               <div className="field span2">
                 <label className="toggle-line">
                   <input type="checkbox" checked={currentStep.apiConfig?.validateTls ?? true} onChange={e => updateApiConfig(editingStep, { validateTls: e.target.checked })} disabled={!isDraft} />
