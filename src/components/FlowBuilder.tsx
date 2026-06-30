@@ -102,7 +102,7 @@ function createField(): Field {
 }
 
 function createApiConfig(): StepApiConfig {
-  return { validateTls: true, method: "GET", scheduleMode: "manual", sendFieldKeys: [], responseMappings: [], bodyMappings: [], headers: [], bodyTemplate: "", retryOnEmptyArray: false, emptyArrayRetryMinutes: 3 };
+  return { validateTls: true, method: "GET", scheduleMode: "manual", sendFieldKeys: [], responseMappings: [], bodyMappings: [], headers: [], bodyTemplate: "", retryOnEmptyArray: false, emptyArrayRetryMinutes: 3, emptyArrayAction: "advance" };
 }
 
 function createStep(name = ""): Step {
@@ -1628,23 +1628,48 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                 </div>}
               {currentStep.type === 5 && <>
                 <div className="field span2">
-                  <label className="toggle-line">
-                    <input
-                      type="checkbox"
-                      checked={currentStep.apiConfig?.retryOnEmptyArray ?? false}
-                      onChange={e => updateApiConfig(editingStep, {
-                        retryOnEmptyArray: e.target.checked,
-                        emptyArrayRetryMinutes: e.target.checked ? (currentStep.apiConfig?.emptyArrayRetryMinutes ?? 3) : null
-                      })}
+                  <label>Regra do retorno</label>
+                  <div className="section-copy" style={{ marginBottom: 10 }}>
+                    Defina o que a etapa deve fazer quando a API responder <code>200 OK</code> com lista vazia <code>[]</code>. Se vier array com itens, o fluxo continua normalmente com o mapeamento configurado.
+                  </div>
+                  <div className="schedule-chip-row">
+                    <button
+                      className={`btn ${(currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "advance" ? "btn-primary" : "btn-ghost"}`}
+                      type="button"
                       disabled={!isDraft}
-                    />
-                    Continuar consultando quando a API responder lista vazia <code>[]</code>
-                  </label>
-                  <div className="section-copy" style={{ marginTop: 8 }}>
-                    Quando a consulta retornar <code>200 OK</code> com <code>[]</code>, a etapa permanece em andamento e o sistema tenta novamente ate receber um array com conteudo.
+                      onClick={() => updateApiConfig(editingStep, {
+                        emptyArrayAction: "advance",
+                        retryOnEmptyArray: false,
+                        emptyArrayRetryMinutes: null
+                      })}
+                    >
+                      Avancar com []
+                    </button>
+                    <button
+                      className={`btn ${(currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "retry" ? "btn-primary" : "btn-ghost"}`}
+                      type="button"
+                      disabled={!isDraft}
+                      onClick={() => updateApiConfig(editingStep, {
+                        emptyArrayAction: "retry",
+                        retryOnEmptyArray: true,
+                        emptyArrayRetryMinutes: currentStep.apiConfig?.emptyArrayRetryMinutes ?? 3
+                      })}
+                    >
+                      Continuar consultando
+                    </button>
                   </div>
                 </div>
-                {(currentStep.apiConfig?.retryOnEmptyArray ?? false) && <div className="field">
+                <div className="field span2">
+                  <div className={`schedule-guide-card ${(currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "retry" ? "active" : ""}`}>
+                    <strong>Comportamento esperado</strong>
+                    <p>
+                      {(currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "retry"
+                        ? "Se a resposta vier como [], a etapa fica em andamento e o sistema faz novas consultas automaticamente ate receber um retorno com conteudo."
+                        : "Se a resposta vier como [], a etapa sera considerada concluida e o fluxo avanca sem aguardar novos dados."}
+                    </p>
+                  </div>
+                </div>
+                {(currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "retry" && <div className="field">
                   <label>Nova tentativa a cada (minutos)</label>
                   <input
                     className="input"
@@ -1652,11 +1677,15 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                     min={1}
                     max={10080}
                     value={currentStep.apiConfig?.emptyArrayRetryMinutes ?? 3}
-                    onChange={e => updateApiConfig(editingStep, { emptyArrayRetryMinutes: Math.max(1, Number(e.target.value) || 1) })}
+                    onChange={e => updateApiConfig(editingStep, {
+                      emptyArrayAction: "retry",
+                      retryOnEmptyArray: true,
+                      emptyArrayRetryMinutes: Math.max(1, Number(e.target.value) || 1)
+                    })}
                     disabled={!isDraft}
                   />
                   <div className="section-copy" style={{ marginTop: 8 }}>
-                    Exemplo: informe <code>3</code> para repetir a consulta a cada 3 minutos enquanto o retorno estiver vazio.
+                    Exemplo: informe <code>3</code> para repetir a consulta a cada 3 minutos enquanto o retorno permanecer vazio.
                   </div>
                 </div>}
               </>}
