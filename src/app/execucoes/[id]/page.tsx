@@ -270,6 +270,22 @@ function formatTechnicalDataLabel(key: string) {
       return "Status da consulta";
     case "_integration.emptyResultRetryMinutes":
       return "Nova consulta a cada (min)";
+    case "_integration.responseRule.status":
+      return "Regra de retorno";
+    case "_integration.responseRule.reason":
+      return "Motivo da regra";
+    case "_integration.responseRule.targetPath":
+      return "Caminho avaliado";
+    case "_integration.responseRule.expectedType":
+      return "Tipo esperado";
+    case "_integration.responseRule.retryIntervalMinutes":
+      return "Nova tentativa a cada (min)";
+    case "_integration.responseRule.attemptCount":
+      return "Tentativa atual";
+    case "_integration.responseRule.maxAttempts":
+      return "Limite de tentativas";
+    case "_integration.responseRule.nextAttemptAtUtc":
+      return "Proxima tentativa";
     case "_integration.mappingWarning":
       return "Aviso do mapeamento";
     case "_integration.mappingResult":
@@ -795,9 +811,13 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
   function renderStepDetails(step: Instance["steps"][number]) {
     const technicalData = getAutomaticStepTechnicalData(step);
-    const isAwaitingData = step.data["_integration.awaitingData"] === true || toText(step.data["_integration.awaitingData"]).toLowerCase() === "true";
-    const awaitingDataMessage = toText(step.data["_integration.awaitingDataMessage"]);
-    const emptyResultRetryMinutes = toText(step.data["_integration.emptyResultRetryMinutes"]);
+    const ruleStatus = toText(step.data["_integration.responseRule.status"]);
+    const isAwaitingData = ruleStatus === "waiting" || step.data["_integration.awaitingData"] === true || toText(step.data["_integration.awaitingData"]).toLowerCase() === "true";
+    const awaitingDataMessage = toText(step.data["_integration.responseRule.reason"]) || toText(step.data["_integration.awaitingDataMessage"]);
+    const nextAttemptAt = toText(step.data["_integration.responseRule.nextAttemptAtUtc"]);
+    const attemptCount = toText(step.data["_integration.responseRule.attemptCount"]);
+    const maxAttempts = toText(step.data["_integration.responseRule.maxAttempts"]);
+    const emptyResultRetryMinutes = toText(step.data["_integration.responseRule.retryIntervalMinutes"]) || toText(step.data["_integration.emptyResultRetryMinutes"]);
 
     return (
       <div style={{ marginTop: 14, paddingLeft: 38 }}>
@@ -819,6 +839,12 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
             {emptyResultRetryMinutes && (
               <div className="section-copy" style={{ marginTop: 6 }}>
                 Nova consulta prevista a cada {emptyResultRetryMinutes} minuto(s) enquanto o retorno permanecer vazio.
+              </div>
+            )}
+            {(attemptCount || maxAttempts || nextAttemptAt) && (
+              <div className="section-copy" style={{ marginTop: 6 }}>
+                {attemptCount && maxAttempts ? `Tentativa ${attemptCount} de ${maxAttempts}. ` : ""}
+                {nextAttemptAt ? `Proxima tentativa: ${nextAttemptAt}.` : ""}
               </div>
             )}
           </div>

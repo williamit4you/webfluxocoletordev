@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@/lib/api";
-import type { BodyFieldMapping, Field, FieldOption, Flow, FlowToken, IntegrationTestResult, RequestHeader, ResponseFieldMapping, Step, StepApiConfig, User } from "@/lib/types";
+import type { BodyFieldMapping, Field, FieldOption, Flow, FlowToken, IntegrationTestResult, RequestHeader, ResponseFieldMapping, ResponseRule, Step, StepApiConfig, User } from "@/lib/types";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Copy, Eye, EyeOff, PencilLine, Plus, Save, Send, Shield, Trash2, Workflow } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -102,7 +102,7 @@ function createField(): Field {
 }
 
 function createApiConfig(): StepApiConfig {
-  return { validateTls: true, method: "GET", scheduleMode: "manual", sendFieldKeys: [], responseMappings: [], bodyMappings: [], headers: [], bodyTemplate: "", retryOnEmptyArray: false, emptyArrayRetryMinutes: 3, emptyArrayAction: "advance" };
+  return { validateTls: true, method: "GET", scheduleMode: "manual", sendFieldKeys: [], responseMappings: [], bodyMappings: [], headers: [], bodyTemplate: "", retryOnEmptyArray: false, emptyArrayRetryMinutes: 3, emptyArrayAction: "advance", responseRule: createResponseRule() };
 }
 
 function createStep(name = ""): Step {
@@ -135,6 +135,52 @@ function createBodyMapping(): BodyFieldMapping {
 
 function createRequestHeader(): RequestHeader {
   return { name: "", value: "" };
+}
+
+function createResponseRule(): ResponseRule {
+  return {
+    enabled: false,
+    targetPath: "$",
+    expectedType: "array",
+    emptyBehavior: "advance",
+    nonEmptyBehavior: "advance",
+    retryIntervalMinutes: 3,
+    maxAttempts: 20,
+    failureBehavior: "fail",
+    description: ""
+  };
+}
+
+function normalizeResponseRule(config?: StepApiConfig | null): ResponseRule {
+  const legacyRetry = config?.retryOnEmptyArray ?? false;
+  return {
+    ...createResponseRule(),
+    ...config?.responseRule,
+    enabled: config?.responseRule?.enabled ?? legacyRetry,
+    emptyBehavior: config?.responseRule?.emptyBehavior ?? config?.emptyArrayAction ?? (legacyRetry ? "retry" : "advance"),
+    retryIntervalMinutes: config?.responseRule?.retryIntervalMinutes ?? config?.emptyArrayRetryMinutes ?? 3
+  };
+}
+
+function describeResponseRule(rule: ResponseRule, stepType: number) {
+  if (!rule.enabled) {
+    return "Sem regra ativa: a etapa usa apenas o sucesso HTTP para decidir se avanca.";
+  }
+
+  const targetPath = rule.targetPath?.trim() || "$";
+  const retryMinutes = rule.retryIntervalMinutes ?? 3;
+  const maxAttempts = rule.maxAttempts ?? 20;
+  const requestName = stepType === 4 ? "POST" : "consulta";
+
+  if (rule.emptyBehavior === "retry") {
+    return `Se ${targetPath} estiver vazio, manter a etapa em andamento e refazer o ${requestName} a cada ${retryMinutes} minuto(s), no maximo ${maxAttempts} tentativa(s). Se tiver conteudo, mapear e avancar.`;
+  }
+
+  if (rule.emptyBehavior === "fail") {
+    return `Se ${targetPath} estiver vazio, marcar a etapa como falha. Se tiver conteudo, mapear e avancar.`;
+  }
+
+  return `Se ${targetPath} estiver vazio, aceitar o retorno e avancar. Se tiver conteudo, mapear e avancar.`;
 }
 
 function normalizeBodyTargetKey(value: string) {
@@ -454,6 +500,7 @@ type BuilderSectionKey =
   | "fields"
   | "autoSchedule"
   | "integration"
+  | "responseRule"
   | "integrationFields"
   | "bodyMapping"
   | "responseMapping"
@@ -495,6 +542,108 @@ function AccordionSection({
   );
 }
 
+function ResponseRuleEditor({
+  config,
+  stepType,
+  isDraft,
+  onChange
+}: {
+  config?: StepApiConfig | null;
+  stepType: number;
+  isDraft: boolean;
+  onChange: (patch: Partial<StepApiConfig>) => void;
+}) {
+  const rule = normalizeResponseRule(config);
+
+  function patchRule(patch: Partial<ResponseRule>) {
+    const nextRule = { ...rule, ...patch };
+    onChange({
+      responseRule: nextRule,
+      retryOnEmptyArray: nextRule.enabled && nextRule.emptyBehavior === "retry",
+      emptyArrayAction: nextRule.emptyBehavior ?? "advance",
+      emptyArrayRetryMinutes: nextRule.enabled && nextRule.emptyBehavior === "retry"
+        ? nextRule.retryIntervalMinutes ?? 3
+        : null
+    });
+  }
+
+  return (
+    <div className="formgrid">
+      <div className="field span2">
+        <label className="toggle-line">
+          <input type="checkbox" checked={rule.enabled} onChange={e => patchRule({ enabled: e.target.checked })} disabled={!isDraft} />
+          Ativar regra de retorno
+        </label>
+      </div>
+
+      <div className="field">
+        <label>Caminho analisado</label>
+        <input className="input" placeholder="$ ou data.items" value={rule.targetPath ?? "$"} onChange={e => patchRule({ targetPath: e.target.value })} disabled={!isDraft || !rule.enabled} />
+      </div>
+
+      <div className="field">
+        <label>Tipo esperado</label>
+        <select className="select" value={rule.expectedType ?? "array"} onChange={e => patchRule({ expectedType: e.target.value })} disabled={!isDraft || !rule.enabled}>
+          <option value="array">Array</option>
+          <option value="object">Objeto</option>
+          <option value="string">Texto</option>
+          <option value="number">Numero</option>
+          <option value="boolean">Booleano</option>
+          <option value="any">Qualquer valor</option>
+        </select>
+      </div>
+
+      <div className="field span2">
+        <label>Se estiver vazio</label>
+        <div className="schedule-chip-row">
+          <button className={`btn ${rule.emptyBehavior === "advance" ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft || !rule.enabled} onClick={() => patchRule({ emptyBehavior: "advance" })}>
+            Avancar
+          </button>
+          <button className={`btn ${rule.emptyBehavior === "retry" ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft || !rule.enabled} onClick={() => patchRule({ emptyBehavior: "retry", retryIntervalMinutes: rule.retryIntervalMinutes ?? 3, maxAttempts: rule.maxAttempts ?? 20 })}>
+            Tentar novamente
+          </button>
+          <button className={`btn ${rule.emptyBehavior === "fail" ? "btn-primary" : "btn-ghost"}`} type="button" disabled={!isDraft || !rule.enabled} onClick={() => patchRule({ emptyBehavior: "fail" })}>
+            Falhar
+          </button>
+        </div>
+      </div>
+
+      {rule.emptyBehavior === "retry" && (
+        <>
+          <div className="field">
+            <label>Nova tentativa a cada (min)</label>
+            <input className="input" type="number" min={1} max={10080} value={rule.retryIntervalMinutes ?? 3} onChange={e => patchRule({ retryIntervalMinutes: Math.max(1, Number(e.target.value) || 1) })} disabled={!isDraft || !rule.enabled} />
+          </div>
+          <div className="field">
+            <label>Limite de tentativas</label>
+            <input className="input" type="number" min={1} max={1000} value={rule.maxAttempts ?? 20} onChange={e => patchRule({ maxAttempts: Math.max(1, Number(e.target.value) || 1) })} disabled={!isDraft || !rule.enabled} />
+          </div>
+        </>
+      )}
+
+      <div className="field span2">
+        <label>Quando tiver conteudo</label>
+        <select className="select" value={rule.nonEmptyBehavior ?? "advance"} onChange={e => patchRule({ nonEmptyBehavior: e.target.value })} disabled={!isDraft || !rule.enabled}>
+          <option value="advance">Mapear resposta e avancar</option>
+          <option value="fail">Falhar</option>
+        </select>
+      </div>
+
+      <div className="field span2">
+        <label>Descricao operacional</label>
+        <input className="input" placeholder="Ex.: Aguardar retorno do laudo ate a API devolver itens." value={rule.description ?? ""} onChange={e => patchRule({ description: e.target.value })} disabled={!isDraft || !rule.enabled} />
+      </div>
+
+      <div className="notice span2">
+        <strong>Resumo da regra</strong>
+        <div className="section-copy" style={{ marginTop: 8 }}>
+          {describeResponseRule(rule, stepType)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function FlowBuilder({ flowId }: { flowId?: string }) {
   const router = useRouter();
   const [builderView, setBuilderView] = useState<"list" | "diagram">("list");
@@ -532,6 +681,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     fields: true,
     autoSchedule: true,
     integration: true,
+    responseRule: true,
     integrationFields: false,
     bodyMapping: false,
     responseMapping: true,
@@ -1626,69 +1776,6 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                   <label>Template da consulta</label>
                   <input className="input" placeholder="Ex.: ?id={{chaveAcesso}}" value={currentStep.apiConfig?.queryTemplate ?? ""} onChange={e => updateApiConfig(editingStep, { queryTemplate: e.target.value })} disabled={!isDraft} />
                 </div>}
-              {(currentStep.type === 4 || currentStep.type === 5) && <>
-                <div className="field span2">
-                  <label>Regra do retorno</label>
-                  <div className="section-copy" style={{ marginBottom: 10 }}>
-                    Defina o que a etapa deve fazer quando a API responder <code>200 OK</code> com lista vazia <code>[]</code>. Se vier array com itens, o fluxo continua normalmente com o mapeamento configurado.
-                  </div>
-                  <div className="schedule-chip-row">
-                    <button
-                      className={`btn ${(currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "advance" ? "btn-primary" : "btn-ghost"}`}
-                      type="button"
-                      disabled={!isDraft}
-                      onClick={() => updateApiConfig(editingStep, {
-                        emptyArrayAction: "advance",
-                        retryOnEmptyArray: false,
-                        emptyArrayRetryMinutes: null
-                      })}
-                    >
-                      Avancar com []
-                    </button>
-                    <button
-                      className={`btn ${(currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "retry" ? "btn-primary" : "btn-ghost"}`}
-                      type="button"
-                      disabled={!isDraft}
-                      onClick={() => updateApiConfig(editingStep, {
-                        emptyArrayAction: "retry",
-                        retryOnEmptyArray: true,
-                        emptyArrayRetryMinutes: currentStep.apiConfig?.emptyArrayRetryMinutes ?? 3
-                      })}
-                    >
-                      Continuar consultando
-                    </button>
-                  </div>}
-                </div>
-                <div className="field span2">
-                  <div className={`schedule-guide-card ${currentStep.type === 5 && (currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "retry" ? "active" : ""}`}>
-                    <strong>Comportamento esperado</strong>
-                    <p>
-                      {(currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "retry"
-                        ? `Se a resposta vier como [], a etapa ${currentStep.type === 4 ? "refaz o POST" : "refaz a consulta"} automaticamente ate receber um retorno com conteudo.`
-                        : "Se a resposta vier como [], a etapa sera considerada concluida e o fluxo avanca sem aguardar novos dados."}
-                    </p>
-                  </div>
-                </div>
-                {(currentStep.apiConfig?.emptyArrayAction ?? (currentStep.apiConfig?.retryOnEmptyArray ? "retry" : "advance")) === "retry" && <div className="field">
-                  <label>Nova tentativa a cada (minutos)</label>
-                  <input
-                    className="input"
-                    type="number"
-                    min={1}
-                    max={10080}
-                    value={currentStep.apiConfig?.emptyArrayRetryMinutes ?? 3}
-                    onChange={e => updateApiConfig(editingStep, {
-                      emptyArrayAction: "retry",
-                      retryOnEmptyArray: true,
-                      emptyArrayRetryMinutes: Math.max(1, Number(e.target.value) || 1)
-                    })}
-                    disabled={!isDraft}
-                  />
-                  <div className="section-copy" style={{ marginTop: 8 }}>
-                    Exemplo: informe <code>3</code> para repetir a consulta a cada 3 minutos enquanto o retorno permanecer vazio.
-                  </div>
-                </div>}
-              </>}
               <div className="field span2">
                 <label className="toggle-line">
                   <input type="checkbox" checked={currentStep.apiConfig?.validateTls ?? true} onChange={e => updateApiConfig(editingStep, { validateTls: e.target.checked })} disabled={!isDraft} />
@@ -1700,6 +1787,20 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
             {(currentStep.type === 2 || currentStep.type === 5) && <div className="formgrid" style={{ marginTop: 16 }}>
               <ScheduleEditor config={currentStep.apiConfig} onChange={patch => updateApiConfig(editingStep, patch)} isDraft={isDraft} stepType={currentStep.type} />
             </div>}
+
+            {(currentStep.type === 4 || currentStep.type === 5) && <AccordionSection
+              title="Regra de retorno"
+              description="Defina o que a resposta precisa ter para a etapa avancar, aguardar nova tentativa ou falhar."
+              open={openSections.responseRule}
+              onToggle={() => toggleSection("responseRule")}
+            >
+              <ResponseRuleEditor
+                config={currentStep.apiConfig}
+                stepType={currentStep.type}
+                isDraft={isDraft}
+                onChange={patch => updateApiConfig(editingStep, patch)}
+              />
+            </AccordionSection>}
 
             <AccordionSection
               title="Campos disponiveis para integracao"
@@ -1940,6 +2041,11 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                 {testResult.mappedFields && Object.keys(testResult.mappedFields).length > 0 && <div style={{ marginTop: 10 }}>
                   <strong>Campos mapeados</strong>
                   <pre style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{JSON.stringify(testResult.mappedFields, null, 2)}</pre>
+                </div>}
+                {testResult.responseRuleEvaluation && <div style={{ marginTop: 10 }}>
+                  <strong>Regra de retorno</strong>
+                  <div className="section-copy" style={{ marginTop: 6 }}>{testResult.responseRuleEvaluation.reason}</div>
+                  <pre style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{JSON.stringify(testResult.responseRuleEvaluation, null, 2)}</pre>
                 </div>}
                 {testResult.errorMessage && <div style={{ marginTop: 8 }}>{testResult.errorMessage}</div>}
               </div>}
