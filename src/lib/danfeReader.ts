@@ -43,6 +43,16 @@ function cleanupValue(value: string) {
   return value.replace(/\s+/g, " ").replace(/\s+([,.;:/-])/g, "$1").trim();
 }
 
+function normalizeNumericIdentifier(value: string) {
+  const digits = extractDigits(value);
+  if (!digits) {
+    return "";
+  }
+
+  const normalized = digits.replace(/^0+/, "");
+  return normalized || "0";
+}
+
 function formatCnpj(value: string) {
   const digits = extractDigits(value);
   if (digits.length !== 14) {
@@ -192,18 +202,35 @@ function findEmissionDate(text: string) {
   return formatDateForInput(anyDate);
 }
 
-function findHeaderFields(text: string) {
+function findHeaderFields(text: string, accessKey: string) {
   const normalized = normalizeText(text);
-  const numero = findFirst(normalized, [
-    /NF-e\s*(?:N[oO]|No|N)?\s*[:.-]?\s*(\d{3,})/i,
-    /N[Uu]MERO\s+(\d{3,})/i
-  ]);
-  const serie = findFirst(normalized, [
-    /S[Ee]RIE\s+(\d{1,3})/i,
-    /SERIE\s+(\d{1,3})/i
-  ]);
+  const numero = normalizeNumericIdentifier(findFirst(normalized, [
+    /NF-e\s*(?:N[oO]|No|N)?\s*[:.-]?\s*(\d{1,9})/i,
+    /N(?:U|Ú)MERO\s*[:.-]?\s*(\d{1,9})/i,
+    /N[º°]\s*[:.-]?\s*(\d{1,9})/i
+  ]));
+  const serie = normalizeNumericIdentifier(findFirst(normalized, [
+    /S(?:E|É)RIE\s*[:.-]?\s*(\d{1,3})/i,
+    /\bSER\s*[:.-]?\s*(\d{1,3})\b/i
+  ]));
+
+  if (accessKey.length === 44) {
+    const serieFromAccessKey = normalizeNumericIdentifier(accessKey.slice(22, 25));
+    const numeroFromAccessKey = normalizeNumericIdentifier(accessKey.slice(25, 34));
+
+    return {
+      numero: numero || numeroFromAccessKey,
+      serie: serie || serieFromAccessKey
+    };
+  }
 
   return { numero, serie };
+}
+
+function findNaturezaOperacao(text: string) {
+  return findFirst(normalizeText(text), [
+    /NATUREZA DA OPERACAO\s+(.+?)(?:\s+PROTOCOLO|\s+INSCRICAO|\s+CHAVE DE ACESSO|$)/i
+  ]);
 }
 
 function findFallbackAddress(text: string, companyName: string, cep: string) {
@@ -292,11 +319,13 @@ function parseDanfeText(text: string): DanfeReadResult {
   const uf = findUf(normalized);
   const dataEmissao = findEmissionDate(normalized);
   const total = findHighestCurrency(normalized);
-  const { numero, serie } = findHeaderFields(normalized);
+  const naturezaOperacao = findNaturezaOperacao(normalized);
+  const { numero, serie } = findHeaderFields(normalized, accessKey);
 
   setAliases(fields, "nfe_chave_acesso", accessKey, ["chaveAcesso"]);
   setAliases(fields, "nfe_numero", numero, ["numeroNfe"]);
   setAliases(fields, "nfe_serie", serie, ["serie"]);
+  setAliases(fields, "nfe_natureza_operacao", naturezaOperacao, ["natureza_operacao"]);
   setAliases(fields, "nfe_data_emissao", dataEmissao, ["dataEmissao", "data_emissao"]);
   setAliases(fields, "emitente_razao_social", emitenteName, ["emitente", "razao_social"]);
   setAliases(fields, "emitente_cnpj", emitenteCnpj ? formatCnpj(emitenteCnpj) : "", ["cnpjEmitente", "cnpj"]);

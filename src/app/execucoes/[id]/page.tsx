@@ -1074,6 +1074,63 @@ function sanitizeStepPayload(currentStep: Instance["steps"][number] | undefined,
   ]));
 }
 
+function getMissingRequiredMessages(currentStep: Instance["steps"][number] | undefined, formData: Record<string, unknown>) {
+  if (!currentStep) {
+    return [] as string[];
+  }
+
+  const payload = sanitizeStepPayload(currentStep, formData);
+  const missing: string[] = [];
+
+  for (const field of currentStep.fields) {
+    if (!field.required) {
+      continue;
+    }
+
+    const value = payload[field.key];
+    if (value == null) {
+      missing.push(field.label);
+      continue;
+    }
+
+    if (isUploadField(field.type)) {
+      if (parseUploadAssets(value).length === 0) {
+        missing.push(field.label);
+      }
+      continue;
+    }
+
+    if (isStructuredListField(field)) {
+      const rows = sanitizeStructuredListValue(field, value);
+      const hasAnyRow = rows.some(row => Object.values(row).some(cell => toText(cell).trim()));
+      if (!hasAnyRow) {
+        missing.push(field.label);
+        continue;
+      }
+
+      for (const [rowIndex, row] of rows.entries()) {
+        for (const option of field.options) {
+          const key = option.key?.trim();
+          if (!option.required || !key) {
+            continue;
+          }
+
+          if (!toText(row[key]).trim()) {
+            missing.push(`${field.label}: item ${rowIndex + 1} - ${option.label}`);
+          }
+        }
+      }
+      continue;
+    }
+
+    if (!toText(value).trim()) {
+      missing.push(field.label);
+    }
+  }
+
+  return missing;
+}
+
 function buildReaderCode(currentStep: Instance["steps"][number] | undefined, formData: Record<string, unknown>) {
   if (!currentStep) {
     return "";
@@ -1838,8 +1895,14 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       return;
     }
 
-    setAdvancing(true);
     setError("");
+    const missing = getMissingRequiredMessages(currentStep, formData);
+    if (missing.length > 0) {
+      setError(`Preencha os campos obrigatorios antes de concluir: ${missing.join(", ")}.`);
+      return;
+    }
+
+    setAdvancing(true);
 
     try {
       await api(`/instances/${id}/advance`, {
@@ -1922,6 +1985,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
             <p className="section-copy">
               {currentStep ? `Preencha os campos e conclua a etapa "${currentStep.name}".` : "Nenhuma etapa manual ativa no momento."}
             </p>
+            {error && <div className="notice" style={{ marginTop: 16 }}>{error}</div>}
           </div>
 
           {currentStep && !currentStep.isAutomatic && (
