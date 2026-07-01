@@ -168,6 +168,10 @@ function extractDigits(value: string) {
   return value.replace(/\D+/g, "");
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function findRegexValue(text: string, patterns: RegExp[]) {
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -256,6 +260,53 @@ function parseDanfeItems(lines: string[]) {
   return items;
 }
 
+async function enrichReaderData(fields: Record<string, unknown>) {
+  const next = { ...fields };
+  const cep = extractDigits(toText(fields.cep));
+
+  if (cep.length === 8) {
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      if (response.ok) {
+        const data = await response.json() as {
+          cep?: string;
+          logradouro?: string;
+          bairro?: string;
+          localidade?: string;
+          uf?: string;
+          erro?: boolean;
+        };
+
+        if (!data.erro) {
+          if (data.cep) {
+            next.cep = data.cep;
+          }
+
+          if (data.logradouro) {
+            next.endereco = data.logradouro;
+          }
+
+          if (data.bairro) {
+            next.bairro = data.bairro;
+          }
+
+          if (data.localidade) {
+            next.municipio = data.localidade;
+          }
+
+          if (data.uf) {
+            next.estado = data.uf;
+          }
+        }
+      }
+    } catch {
+      // Keep the extracted values when the CEP lookup is unavailable.
+    }
+  }
+
+  return next;
+}
+
 function parseDanfeText(text: string) {
   const compactText = text.replace(/\s+/g, " ").trim();
   const lines = text
@@ -265,9 +316,16 @@ function parseDanfeText(text: string) {
 
   const fields: Record<string, unknown> = {};
 
+  const emitente = findRegexValue(compactText, [
+    /RECEBEMOS DE (.+?) OS PRODUTOS CONSTANTES DA NOTA FISCAL/i
+  ]);
+  if (emitente) {
+    fields.razao_social = emitente;
+    fields.emitente = emitente;
+  }
+
   const cnpj = findRegexValue(compactText, [
-    /CNPJ\/CPF[:\s]*([\d./-]{14,18})/i,
-    /CNPJ[:\s]*([\d./-]{14,18})/i
+    /\b(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/
   ]);
   if (cnpj) {
     fields.cnpj = cnpj;
@@ -275,19 +333,12 @@ function parseDanfeText(text: string) {
   }
 
   const inscricaoEstadual = findRegexValue(compactText, [
-    /INSCRI(?:C|Ç)AO ESTADUAL[:\s]*([A-Z0-9./-]+)/i
+    /TERCEIROS TP:?\s*([0-9]{8,14})/i,
+    /OPERAÇÃOINSCRIÇÃO ESTADUALINSC\.ESTADUAL DO SUBST\. TRIBUTÁRIOCNPJ.*?([0-9]{8,14})\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/i
   ]);
   if (inscricaoEstadual) {
     fields.inscricao_estadual = inscricaoEstadual;
     fields.inscricaoEstadual = inscricaoEstadual;
-  }
-
-  const razaoSocial = findLineValue(lines, [/nome.*razao social/i, /^emitente$/i], [
-    /NOME\/RAZAO SOCIAL[:\s]*(.+?)(?=\s+CNPJ|\s+ENDERECO|\s+DATA)/i
-  ]);
-  if (razaoSocial) {
-    fields.razao_social = razaoSocial;
-    fields.emitente = razaoSocial;
   }
 
   const dataEmissao = findRegexValue(compactText, [
@@ -298,16 +349,35 @@ function parseDanfeText(text: string) {
     fields.dataEmissao = dataEmissao;
   }
 
-  const endereco = findLineValue(lines, [/^endereco$/i, /^logradouro$/i], [
-    /ENDERECO[:\s]*(.+?)(?=\s+BAIRRO|\s+CEP|\s+MUNICIPIO)/i
-  ]);
+  const emitenteAddressBlock = emitente
+    ? findRegexValue(compactText, [
+      new RegExp(`${escapeRegExp(emitente)}(.+?)CEP:\\s*([0-9]{8})`, "i")
+    ])
+    : "";
+  const endereco = emitenteAddressBlock
+    ? emitenteAddressBlock
+      .replace(/\d{2}\/\d{2}\/\d{4}.*/i, "")
+      .replace(/\s+[A-Z]{2}\s*-\s*CEP\s*:?\s*[0-9-]+/i, "")
+      .split(/\s-\s/)
+      .slice(0, 1)
+      .join(" ")
+      .trim()
+    : findLineValue(lines, [/^endereco$/i, /^logradouro$/i], [
+      /ENDERECO[:\s]*(.+?)(?=\s+BAIRRO|\s+CEP|\s+MUNICIPIO)/i
+    ]);
   if (endereco) {
     fields.endereco = endereco;
   }
 
-  const bairro = findLineValue(lines, [/^bairro/i, /distrito/i], [
-    /BAIRRO(?:\s*\/\s*DISTRITO)?[:\s]*(.+?)(?=\s+CEP|\s+MUNICIPIO|\s+UF)/i
-  ]);
+  const bairro = emitenteAddressBlock
+    ? emitenteAddressBlock
+      .replace(/\d{2}\/\d{2}\/\d{4}.*/i, "")
+      .replace(/^.*?\s-\s/, "")
+      .replace(/[A-Z\s]+?\s*-\s*[A-Z]{2}\s*-\s*CEP.*/i, "")
+      .trim()
+    : findLineValue(lines, [/^bairro/i, /distrito/i], [
+      /BAIRRO(?:\s*\/\s*DISTRITO)?[:\s]*(.+?)(?=\s+CEP|\s+MUNICIPIO|\s+UF)/i
+    ]);
   if (bairro) {
     fields.bairro = bairro;
   }
@@ -319,9 +389,13 @@ function parseDanfeText(text: string) {
     fields.cep = cep;
   }
 
-  const municipio = findLineValue(lines, [/^municipio$/i, /^cidade$/i], [
-    /MUNICIPIO[:\s]*(.+?)(?=\s+FONE|\s+UF|\s+INSCRI)/i
-  ]);
+  const municipio = emitenteAddressBlock
+    ? findRegexValue(emitenteAddressBlock, [
+      /([A-ZÀ-Ú\s]+)\s*-\s*[A-Z]{2}\s*-\s*CEP/i
+    ])
+    : findLineValue(lines, [/^municipio$/i, /^cidade$/i], [
+      /MUNICIPIO[:\s]*(.+?)(?=\s+FONE|\s+UF|\s+INSCRI)/i
+    ]);
   if (municipio) {
     fields.municipio = municipio;
   }
@@ -334,6 +408,7 @@ function parseDanfeText(text: string) {
   }
 
   const estado = findRegexValue(compactText, [
+    /([A-Z]{2})\s*-\s*CEP:\s*[0-9]{8}/i,
     /\bUF[:\s]*([A-Z]{2})\b/i
   ]);
   if (estado) {
@@ -341,6 +416,7 @@ function parseDanfeText(text: string) {
   }
 
   const valorProdutos = findRegexValue(compactText, [
+    /([0-9.]+,[0-9]{2})\s*VALOR TOTAL DOS PRODUTOS/i,
     /VALOR TOTAL DOS PRODUTOS[:\s]*([0-9.]+,[0-9]{2})/i
   ]);
   if (valorProdutos) {
@@ -348,12 +424,16 @@ function parseDanfeText(text: string) {
   }
 
   const valorNota = findRegexValue(compactText, [
+    /([0-9.]+,[0-9]{2})\s*VALOR TOTAL DA NOTA/i,
     /VALOR TOTAL DA NOTA[:\s]*([0-9.]+,[0-9]{2})/i,
     /VALOR TOTAL[:\s]*([0-9.]+,[0-9]{2})/i
   ]);
   if (valorNota) {
     fields.valor_total_da_nota = valorNota;
     fields.valorTotal = valorNota;
+    if (!fields.valor_total_dos_produtos) {
+      fields.valor_total_dos_produtos = valorNota;
+    }
   }
 
   const chaveAcesso = extractDigits(findRegexValue(compactText, [
@@ -1528,9 +1608,10 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
     try {
       const result = await readDanfeInBrowser(file);
-      const matchedFields = applyReaderData(result.fields);
+      const enrichedFields = await enrichReaderData(result.fields);
+      const matchedFields = applyReaderData(enrichedFields);
       const warnings = [...result.warnings];
-      if (!matchedFields && Object.keys(result.fields).length > 0) {
+      if (!matchedFields && Object.keys(enrichedFields).length > 0) {
         warnings.push("Os dados foram lidos, mas nao combinaram com os campos configurados nesta etapa.");
       }
 
