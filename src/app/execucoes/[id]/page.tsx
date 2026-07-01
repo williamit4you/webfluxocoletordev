@@ -370,7 +370,14 @@ function parseDanfeText(text: string) {
     ? compactText.match(new RegExp(`${escapeRegExp(emitente)}\\s+(.+?)\\s+([A-ZÀ-Ú\\s]+?)\\s+-\\s+([A-Z]{2})\\s+-\\s+CEP:\\s*([0-9]{8})\\s+([0-9]{2}\\/[0-9]{2}\\/[0-9]{4})`, "i"))
     : null;
 
-  const rawAddressBlock = emitenteBlockMatch?.[1]?.trim() ?? "";
+  const emitenteBlock = emitenteBlockMatch ?? (emitente
+    ? compactText.match(new RegExp(
+      `${escapeRegExp(emitente)}\\s+(.+?)\\s+([A-ZÃ€-Ãš\\s]+?)\\s*-\\s*([A-Z]{2})\\s*-\\s*CEP:\\s*([0-9]{8})\\s*([0-9]{2}\\/[0-9]{2}\\/[0-9]{4})`,
+      "i"
+    ))
+    : null);
+
+  const rawAddressBlock = emitenteBlock?.[1]?.trim() ?? "";
   const lastHyphenIndex = rawAddressBlock.lastIndexOf(" - ");
   const endereco = lastHyphenIndex > 0
     ? rawAddressBlock.slice(0, lastHyphenIndex).trim()
@@ -386,14 +393,14 @@ function parseDanfeText(text: string) {
     fields.bairro = bairro;
   }
 
-  const cep = emitenteBlockMatch?.[4]?.trim() ?? findRegexValue(compactText, [
+  const cep = emitenteBlock?.[4]?.trim() ?? findRegexValue(compactText, [
     /CEP[:\s]*([0-9]{5}-?[0-9]{3})/i
   ]);
   if (cep) {
     fields.cep = cep;
   }
 
-  const municipio = emitenteBlockMatch?.[2]?.trim() ?? "";
+  const municipio = emitenteBlock?.[2]?.trim() ?? "";
   if (municipio) {
     fields.municipio = municipio;
   }
@@ -405,7 +412,7 @@ function parseDanfeText(text: string) {
     fields.telefone = telefone;
   }
 
-  const estado = emitenteBlockMatch?.[3]?.trim() ?? findRegexValue(compactText, [
+  const estado = emitenteBlock?.[3]?.trim() ?? findRegexValue(compactText, [
     /([A-Z]{2})\s*-\s*CEP:\s*[0-9]{8}/i,
     /\bUF[:\s]*([A-Z]{2})\b/i
   ]);
@@ -413,7 +420,7 @@ function parseDanfeText(text: string) {
     fields.estado = estado;
   }
 
-  const dataEmissao = emitenteBlockMatch?.[5]?.trim() ?? findRegexValue(compactText, [
+  const dataEmissao = emitenteBlock?.[5]?.trim() ?? findRegexValue(compactText, [
     /DATA (?:DE )?EMISSAO[:\s]*([0-9]{2}\/[0-9]{2}\/[0-9]{4})/i
   ]);
   if (dataEmissao) {
