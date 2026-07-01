@@ -328,7 +328,7 @@ async function enrichReaderData(fields: Record<string, unknown>) {
 
   if (cep.length === 8) {
     try {
-      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const response = await fetch(`/api/cep/${cep}`);
       if (response.ok) {
         const data = await response.json() as {
           cep?: string;
