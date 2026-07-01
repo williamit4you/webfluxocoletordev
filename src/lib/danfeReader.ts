@@ -50,6 +50,33 @@ function splitLines(text: string) {
     .filter(Boolean);
 }
 
+function normalizeMoneyValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/^\d{1,3}(?:\.\d{3})*,\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  if (/^\d+(?:\.\d{4})$/.test(trimmed) || /^\d{1,3}(?:,\d{3})+\.\d{4}$/.test(trimmed)) {
+    const parsed = Number(trimmed.replace(/,/g, ""));
+    if (Number.isFinite(parsed)) {
+      return formatCurrency(parsed);
+    }
+  }
+
+  if (/^\d+\.\d{2}$/.test(trimmed)) {
+    const parsed = Number(trimmed);
+    if (Number.isFinite(parsed)) {
+      return formatCurrency(parsed);
+    }
+  }
+
+  return trimmed;
+}
+
 function normalizeNumericIdentifier(value: string) {
   const digits = extractDigits(value);
   if (!digits) {
@@ -240,9 +267,76 @@ function findNaturezaOperacao(text: string) {
   ]);
 }
 
+function isDanfeItemsFooter(line: string) {
+  return /dados adicionais|calculo do imposto|transportador|cobranca|informacoes complementares|valor bc-st|valor icms-st/i.test(line);
+}
+
+function isNcmToken(value: string) {
+  return /^\d{8}$/.test(extractDigits(value));
+}
+
+function isCfopToken(value: string) {
+  return /^\d{4}$/.test(extractDigits(value));
+}
+
+function isCstToken(value: string) {
+  return /^\d{2,3}$/.test(extractDigits(value));
+}
+
+function isUnitToken(value: string) {
+  return /^[A-Z]{1,5}$/.test(value.trim().toUpperCase());
+}
+
+function isQuantityToken(value: string) {
+  return /^\d+(?:[.,]\d+)?$/.test(value.trim());
+}
+
+function isMoneyToken(value: string) {
+  return /^\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2,4})$/.test(value.trim()) || /^\d+[.,]\d{2,4}$/.test(value.trim());
+}
+
+function parseDanfeItemLine(line: string) {
+  const tokens = line.split(/\s+/).filter(Boolean);
+  if (tokens.length < 8) {
+    return null;
+  }
+
+  const code = tokens[0]?.trim();
+  const ncmIndex = tokens.findIndex((token, index) => index > 0 && isNcmToken(token));
+  if (!code || ncmIndex < 2) {
+    return null;
+  }
+
+  const description = tokens.slice(1, ncmIndex).join(" ").trim();
+  const ncm = extractDigits(tokens[ncmIndex]);
+  const cst = tokens[ncmIndex + 1]?.trim() ?? "";
+  const cfop = tokens[ncmIndex + 2]?.trim() ?? "";
+  const unidade = tokens[ncmIndex + 3]?.trim() ?? "";
+  const quantidade = tokens[ncmIndex + 4]?.trim() ?? "";
+  const valorUnitario = tokens[ncmIndex + 5]?.trim() ?? "";
+  const valorTotalItem = tokens[ncmIndex + 6]?.trim() ?? "";
+
+  if (!description || !isCstToken(cst) || !isCfopToken(cfop) || !isUnitToken(unidade) || !isQuantityToken(quantidade) || !isMoneyToken(valorUnitario) || !isMoneyToken(valorTotalItem)) {
+    return null;
+  }
+
+  return {
+    codigo_produto: code,
+    descricao: description,
+    ncm,
+    cst,
+    cfop,
+    unidade,
+    quantidade,
+    qtde: quantidade,
+    valor_unitario: normalizeMoneyValue(valorUnitario),
+    valor_total_item: normalizeMoneyValue(valorTotalItem)
+  } satisfies Record<string, unknown>;
+}
+
 function parseDanfeItems(lines: string[]) {
   const items: Array<Record<string, unknown>> = [];
-  const startIndex = lines.findIndex(line => /codigo\s+produto|cod(?:igo)?\s+prod/i.test(line) && /descricao/i.test(line));
+  const startIndex = lines.findIndex(line => /cod(?:igo)?\.?\s*prod|cod(?:igo)?\s+produto/i.test(line) && /descricao/i.test(line));
   if (startIndex < 0) {
     return items;
   }
@@ -253,27 +347,35 @@ function parseDanfeItems(lines: string[]) {
       continue;
     }
 
-    if (/dados adicionais|calculo do imposto|transportador|cobranca|informacoes complementares/i.test(line)) {
+    if (isDanfeItemsFooter(line)) {
       break;
     }
 
-    const match = line.match(/^(\S+)\s+(.+?)\s+(\d{4}\.?\d{2}\.?\d{2}|\d{8})\s+([0-9]{2,3})\s+([0-9]{4})\s+([A-Z]{1,4}|UN|PC|KG|CX|LT|SC)?\s*([0-9.,]+)\s+([0-9.,]+)\s+([0-9.,]+)$/i);
-    if (!match) {
+    const parsed = parseDanfeItemLine(line);
+    if (!parsed) {
       continue;
     }
 
-    items.push({
-      codigo_produto: match[1].trim(),
-      descricao: match[2].trim(),
-      ncm: match[3].trim(),
-      cst: match[4].trim(),
-      cfop: match[5].trim(),
-      unidade: match[6]?.trim() ?? "",
-      quantidade: match[7].trim(),
-      qtde: match[7].trim(),
-      valor_unitario: match[8].trim(),
-      valor_total_item: match[9].trim()
-    });
+    const continuation: string[] = [];
+    while (index + 1 < lines.length) {
+      const nextLine = lines[index + 1].trim();
+      if (!nextLine || isDanfeItemsFooter(nextLine) || parseDanfeItemLine(nextLine)) {
+        break;
+      }
+
+      if (/^vlr\s+bc-st|^vlr\s+icms-st/i.test(nextLine)) {
+        break;
+      }
+
+      continuation.push(nextLine);
+      index += 1;
+    }
+
+    if (continuation.length > 0) {
+      parsed.descricao = cleanupValue(`${parsed.descricao} ${continuation.join(" ")}`);
+    }
+
+    items.push(parsed);
   }
 
   return items;
