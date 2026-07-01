@@ -367,12 +367,12 @@ function parseDanfeText(text: string) {
   }
 
   const emitenteBlockMatch = emitente
-    ? compactText.match(new RegExp(`${escapeRegExp(emitente)}\\s+(.+?)\\s+([A-ZÀ-Ú\\s]+?)\\s+-\\s+([A-Z]{2})\\s+-\\s+CEP:\\s*([0-9]{8})\\s+([0-9]{2}\\/[0-9]{2}\\/[0-9]{4})`, "i"))
+    ? compactText.match(new RegExp(`${escapeRegExp(emitente)}\\s+(.+?)\\s+([A-ZÃƒâ‚¬-ÃƒÅ¡\\s]+?)\\s+-\\s+([A-Z]{2})\\s+-\\s+CEP:\\s*([0-9]{8})\\s+([0-9]{2}\\/[0-9]{2}\\/[0-9]{4})`, "i"))
     : null;
 
   const emitenteBlock = emitenteBlockMatch ?? (emitente
     ? compactText.match(new RegExp(
-      `${escapeRegExp(emitente)}\\s+(.+?)\\s+([A-ZÃ€-Ãš\\s]+?)\\s*-\\s*([A-Z]{2})\\s*-\\s*CEP:\\s*([0-9]{8})\\s*([0-9]{2}\\/[0-9]{2}\\/[0-9]{4})`,
+      `${escapeRegExp(emitente)}\\s+(.+?)\\s+([A-ZÃƒÆ’Ã¢â€šÂ¬-ÃƒÆ’Ã…Â¡\\s]+?)\\s*-\\s*([A-Z]{2})\\s*-\\s*CEP:\\s*([0-9]{8})\\s*([0-9]{2}\\/[0-9]{2}\\/[0-9]{4})`,
       "i"
     ))
     : null);
@@ -463,15 +463,15 @@ function parseDanfeText(text: string) {
   }
 
   const numeroNfe = findRegexValue(compactText, [
-    /N[ÚU]MERO[:\s]*([0-9]{1,9})/i,
-    /NF-E\s+N[Oº°]?\s*([0-9]{1,9})/i
+    /N[ÃƒÅ¡U]MERO[:\s]*([0-9]{1,9})/i,
+    /NF-E\s+N[OÃ‚ÂºÃ‚Â°]?\s*([0-9]{1,9})/i
   ]);
   if (numeroNfe) {
     fields.numeroNfe = numeroNfe;
   }
 
   const serie = findRegexValue(compactText, [
-    /S[ÉE]RIE[:\s]*([0-9]{1,3})/i
+    /S[Ãƒâ€°E]RIE[:\s]*([0-9]{1,3})/i
   ]);
   if (serie) {
     fields.serie = serie;
