@@ -26,6 +26,110 @@ function toText(value: unknown) {
   return typeof value === "string" ? value : value == null ? "" : String(value);
 }
 
+function normalizeReaderToken(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+const readerAliasGroups: ReadonlyArray<ReadonlyArray<string>> = [
+  ["chaveacesso", "chave", "chavenfe", "chavedeacesso", "accesskey"],
+  ["numeronfe", "numerodanota", "numerodocumento", "numero", "nfe"],
+  ["serie"],
+  ["emitente", "razaosocial", "razaosocialemitente", "fornecedor", "nomeemitente"],
+  ["cnpj", "cnpjemitente", "documentoemitente", "cpfcnpj", "cpfcnpjemitente"],
+  ["inscricaoestadual", "ie", "ieemitente", "inscestadual"],
+  ["dataemissao", "emissao", "data"],
+  ["endereco", "logradouro", "rua", "enderecocompleto"],
+  ["bairro"],
+  ["cep"],
+  ["municipio", "cidade", "localidade"],
+  ["estado", "uf"],
+  ["telefone", "fone", "celular", "contato"],
+  ["valortotal", "valortotaldanota", "totalnota", "valornota"],
+  ["valortotaldosprodutos", "totalprodutos", "valorprodutos"],
+  ["itens", "produtos"]
+];
+
+function expandReaderAliases(value: string) {
+  const normalized = normalizeReaderToken(value);
+  const aliases = new Set<string>([normalized]);
+
+  for (const group of readerAliasGroups) {
+    if (group.includes(normalized)) {
+      for (const alias of group) {
+        aliases.add(alias);
+      }
+    }
+  }
+
+  return aliases;
+}
+
+function parseReaderDate(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const brDate = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (brDate) {
+    return `${brDate[3]}-${brDate[2]}-${brDate[1]}`;
+  }
+
+  const isoDate = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDate) {
+    return `${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`;
+  }
+
+  return trimmed;
+}
+
+function parseReaderNumber(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const normalized = trimmed.replace(/\./g, "").replace(",", ".");
+  return /^-?\d+(?:\.\d+)?$/.test(normalized) ? normalized : trimmed;
+}
+
+function coerceReaderValue(field: ExecutionField, value: unknown) {
+  const text = toText(value).trim();
+  if (!text) {
+    return "";
+  }
+
+  if (field.type === 2) {
+    return parseReaderDate(text);
+  }
+
+  if (field.type === 1) {
+    return parseReaderNumber(text);
+  }
+
+  return field.mask ? applyMask(field.mask, text) : text;
+}
+
+function buildReaderCandidates(field: ExecutionField) {
+  const candidates = new Set<string>();
+
+  for (const source of [field.key, field.label]) {
+    for (const alias of expandReaderAliases(source)) {
+      candidates.add(alias);
+    }
+  }
+
+  return candidates;
+}
+
 function formatPreviewContent(value: unknown) {
   if (value && typeof value === "object") {
     return JSON.stringify(value, null, 2);
@@ -1016,7 +1120,39 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   }
 
   function applyReaderData(nextData: Record<string, unknown>) {
-    setFormData(current => ({ ...current, ...nextData }));
+    if (!currentStep) {
+      setFormData(current => ({ ...current, ...nextData }));
+      return 0;
+    }
+
+    const normalizedEntries = Object.entries(nextData).map(([key, value]) => ({
+      key,
+      value,
+      aliases: expandReaderAliases(key)
+    }));
+
+    const mappedEntries: Array<[string, unknown]> = [];
+    for (const field of currentStep.fields) {
+      if (isStructuredListField(field)) {
+        continue;
+      }
+
+      const candidates = buildReaderCandidates(field);
+      const match = normalizedEntries.find(entry => [...entry.aliases].some(alias => candidates.has(alias)));
+      if (!match) {
+        continue;
+      }
+
+      mappedEntries.push([field.key, coerceReaderValue(field, match.value)]);
+    }
+
+    if (mappedEntries.length === 0) {
+      setFormData(current => ({ ...current, ...nextData }));
+      return 0;
+    }
+
+    setFormData(current => ({ ...current, ...Object.fromEntries(mappedEntries) }));
+    return mappedEntries.length;
   }
 
   async function readPdf(file?: File) {
@@ -1031,8 +1167,13 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
     try {
       const result = await api<{ fields: Record<string, string>; warnings: string[] }>("/documents/nfe/extract", { method: "POST", body });
-      applyReaderData(result.fields);
-      setReaderWarning(result.warnings.join(" "));
+      const matchedFields = applyReaderData(result.fields);
+      const warnings = [...result.warnings];
+      if (!matchedFields && Object.keys(result.fields).length > 0) {
+        warnings.push("Os dados foram lidos, mas nao combinaram com os campos configurados nesta etapa.");
+      }
+
+      setReaderWarning(warnings.join(" "));
     } catch (e) {
       setReaderWarning(e instanceof Error ? e.message : "Falha na leitura.");
     }
