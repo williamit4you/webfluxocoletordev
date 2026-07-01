@@ -13,3 +13,22 @@
 .preview-content.collapsed{max-height:220px}
 .preview-content.expanded{max-height:640px}
 .preview-toggle{margin-top:6px;padding-left:0}
+.journey-diagram{display:grid;gap:22px}
+.step-diagram-scroll{overflow-x:auto;padding-bottom:6px}
+.step-diagram-canvas{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(256px,256px);gap:56px;align-items:start;padding:8px 4px 12px}
+.diagram-node{display:grid;gap:14px;min-width:0;position:relative}
+.diagram-node:not(:last-child)::after{content:"";position:absolute;top:74px;left:calc(100% + 12px);width:32px;height:2px;background:linear-gradient(90deg,#d4e7de 0,#9ccfbe 100%)}
+.diagram-node-card{width:100%;min-height:192px;height:192px;padding:18px;border:1px solid #cfe1d9;border-radius:22px;background:linear-gradient(180deg,#fff 0,#fbfdfc 100%);box-shadow:var(--shadow);display:grid;grid-template-rows:auto minmax(3.3em,auto) minmax(2.8em,auto) auto;align-content:start;gap:12px;text-align:left}
+.diagram-node.active .diagram-node-card{border-color:#efb35d;box-shadow:0 0 0 4px #fff3df,var(--shadow)}
+.diagram-node.failed .diagram-node-card{border-color:#e4a7a2;box-shadow:0 0 0 4px #fdeceb,var(--shadow)}
+.diagram-node-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.diagram-node-kind{display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:0 12px;border-radius:999px;background:#f6f1e4;color:#a46d16;font-size:12px;font-weight:800;letter-spacing:.02em;white-space:nowrap}
+.diagram-node-card strong{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:clamp(1rem,.45vw + .92rem,1.18rem);line-height:1.22;letter-spacing:-.02em;min-height:2.44em}
+.diagram-node-card small{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;color:var(--muted);font-size:clamp(11px,.18vw + 11px,12.5px);line-height:1.35;min-height:2.7em}
+.diagram-node-actions{display:flex;justify-content:center}
+.journey-diagram-panel{border:1px solid var(--line);border-radius:22px;background:rgba(255,255,255,.9);box-shadow:var(--shadow);padding:22px}
+.journey-diagram-panel-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:10px}
+.journey-diagram-panel-head h3{margin:8px 0 0;font-size:24px;line-height:1.08;letter-spacing:-.03em}
+.journey-diagram-details{border-top:1px solid var(--line);padding-top:10px}
+.journey-diagram-details-wide>div{padding-left:0!important}
+@media(max-width:900px){.step-diagram-canvas{grid-auto-columns:minmax(224px,224px);gap:38px}.diagram-node-card{min-height:180px;height:180px}.diagram-node:not(:last-child)::after{top:68px}}
