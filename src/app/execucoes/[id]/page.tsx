@@ -1074,13 +1074,18 @@ function sanitizeStepPayload(currentStep: Instance["steps"][number] | undefined,
   ]));
 }
 
-function getMissingRequiredMessages(currentStep: Instance["steps"][number] | undefined, formData: Record<string, unknown>) {
+type RequiredFieldIssue = {
+  fieldKey: string;
+  message: string;
+};
+
+function getRequiredFieldIssues(currentStep: Instance["steps"][number] | undefined, formData: Record<string, unknown>) {
   if (!currentStep) {
-    return [] as string[];
+    return [] as RequiredFieldIssue[];
   }
 
   const payload = sanitizeStepPayload(currentStep, formData);
-  const missing: string[] = [];
+  const issues: RequiredFieldIssue[] = [];
 
   for (const field of currentStep.fields) {
     if (!field.required) {
@@ -1089,13 +1094,13 @@ function getMissingRequiredMessages(currentStep: Instance["steps"][number] | und
 
     const value = payload[field.key];
     if (value == null) {
-      missing.push(field.label);
+      issues.push({ fieldKey: field.key, message: field.label });
       continue;
     }
 
     if (isUploadField(field.type)) {
       if (parseUploadAssets(value).length === 0) {
-        missing.push(field.label);
+        issues.push({ fieldKey: field.key, message: field.label });
       }
       continue;
     }
@@ -1104,7 +1109,7 @@ function getMissingRequiredMessages(currentStep: Instance["steps"][number] | und
       const rows = sanitizeStructuredListValue(field, value);
       const hasAnyRow = rows.some(row => Object.values(row).some(cell => toText(cell).trim()));
       if (!hasAnyRow) {
-        missing.push(field.label);
+        issues.push({ fieldKey: field.key, message: field.label });
         continue;
       }
 
@@ -1116,7 +1121,7 @@ function getMissingRequiredMessages(currentStep: Instance["steps"][number] | und
           }
 
           if (!toText(row[key]).trim()) {
-            missing.push(`${field.label}: item ${rowIndex + 1} - ${option.label}`);
+            issues.push({ fieldKey: field.key, message: `${field.label}: item ${rowIndex + 1} - ${option.label}` });
           }
         }
       }
@@ -1124,11 +1129,11 @@ function getMissingRequiredMessages(currentStep: Instance["steps"][number] | und
     }
 
     if (!toText(value).trim()) {
-      missing.push(field.label);
+      issues.push({ fieldKey: field.key, message: field.label });
     }
   }
 
-  return missing;
+  return issues;
 }
 
 function buildReaderCode(currentStep: Instance["steps"][number] | undefined, formData: Record<string, unknown>) {
@@ -1462,7 +1467,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const [journeyView, setJourneyView] = useState<"timeline" | "diagram">("timeline");
   const [readerWarning, setReaderWarning] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [invalidFieldKeys, setInvalidFieldKeys] = useState<string[]>([]);
   const video = useRef<HTMLVideoElement>(null);
+  const fieldRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   function exitIfForbidden(cause: unknown) {
     if (!(cause instanceof Error) || cause.message !== "Acesso negado.") {
@@ -1516,6 +1523,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       : null,
     [currentStep, currentStepDefinition]
   );
+  const invalidFieldSet = useMemo(() => new Set(invalidFieldKeys), [invalidFieldKeys]);
 
   function canReprocessStep(step: Instance["steps"][number]) {
     const isIntegration = step.type === 4 || step.type === 5;
@@ -1555,6 +1563,17 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
   function toggleJourneyDiagramDetails(stepId: string) {
     setExpandedSteps(current => current[stepId] ? {} : { [stepId]: true });
+  }
+
+  function focusFirstInvalidField(fieldKey: string) {
+    const element = fieldRefs.current[fieldKey];
+    if (!element) {
+      return;
+    }
+
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    const input = element.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input, select, textarea");
+    input?.focus();
   }
 
   function renderStepDetails(step: Instance["steps"][number]) {
@@ -1896,12 +1915,16 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     }
 
     setError("");
-    const missing = getMissingRequiredMessages(currentStep, formData);
-    if (missing.length > 0) {
-      setError(`Preencha os campos obrigatorios antes de concluir: ${missing.join(", ")}.`);
+    const issues = getRequiredFieldIssues(currentStep, formData);
+    if (issues.length > 0) {
+      const uniqueFieldKeys = [...new Set(issues.map(issue => issue.fieldKey))];
+      setInvalidFieldKeys(uniqueFieldKeys);
+      setError(`Preencha os campos obrigatorios antes de concluir: ${issues.map(issue => issue.message).join(", ")}.`);
+      focusFirstInvalidField(uniqueFieldKeys[0]);
       return;
     }
 
+    setInvalidFieldKeys([]);
     setAdvancing(true);
 
     try {
@@ -1956,10 +1979,6 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     }
   }
 
-  if (error) {
-    return <div className="error">{error}</div>;
-  }
-
   if (!item) {
     return <div className="empty">Carregando execucao...</div>;
   }
@@ -1985,7 +2004,16 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
             <p className="section-copy">
               {currentStep ? `Preencha os campos e conclua a etapa "${currentStep.name}".` : "Nenhuma etapa manual ativa no momento."}
             </p>
-            {error && <div className="notice" style={{ marginTop: 16 }}>{error}</div>}
+            {error && (
+              <div
+                className="error"
+                role="alert"
+                aria-live="assertive"
+                style={{ marginTop: 16, marginBottom: 0, border: "1px solid #f4c7c3", boxShadow: "0 10px 24px rgba(201,77,69,.08)" }}
+              >
+                {error}
+              </div>
+            )}
           </div>
 
           {currentStep && !currentStep.isAutomatic && (
@@ -2013,14 +2041,40 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
               )}
 
               {currentStep.fields.map(field => (
-                <div className={`field ${isStructuredListField(field) ? "span2" : ""}`} key={`${currentStep.id}-${field.key}`}>
+                <div
+                  className={`field ${isStructuredListField(field) ? "span2" : ""}`}
+                  key={`${currentStep.id}-${field.key}`}
+                  ref={element => {
+                    fieldRefs.current[field.key] = element;
+                  }}
+                >
                   <label>{field.label}{field.required ? " *" : ""}</label>
-                  {renderFieldInput(
-                    field,
-                    formData[field.key] ?? (isStructuredListField(field) ? [] : ""),
-                    next => setFormData(current => ({ ...current, [field.key]: next })),
-                    uploadFile,
-                    uploadingFieldKey === field.key
+                  <div
+                    style={invalidFieldSet.has(field.key)
+                      ? {
+                        border: "1px solid var(--danger)",
+                        borderRadius: 12,
+                        padding: 6,
+                        background: "#fff7f6",
+                        boxShadow: "0 0 0 3px rgba(201,77,69,.10)"
+                      }
+                      : undefined}
+                  >
+                    {renderFieldInput(
+                      field,
+                      formData[field.key] ?? (isStructuredListField(field) ? [] : ""),
+                      next => {
+                        setFormData(current => ({ ...current, [field.key]: next }));
+                        if (invalidFieldSet.has(field.key)) {
+                          setInvalidFieldKeys(current => current.filter(key => key !== field.key));
+                        }
+                      },
+                      uploadFile,
+                      uploadingFieldKey === field.key
+                    )}
+                  </div>
+                  {invalidFieldSet.has(field.key) && (
+                    <small style={{ color: "var(--danger)", fontWeight: 700 }}>Campo obrigatorio.</small>
                   )}
                 </div>
               ))}
