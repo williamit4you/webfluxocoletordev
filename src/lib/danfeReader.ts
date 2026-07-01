@@ -15,6 +15,17 @@ type PdfJsLib = {
   };
 };
 
+type PositionedToken = {
+  text: string;
+  x: number;
+  y: number;
+};
+
+type PositionedRow = {
+  y: number;
+  tokens: PositionedToken[];
+};
+
 type DanfeReaderWindow = Window & {
   pdfjsLib?: PdfJsLib;
   __pdfJsLoader?: Promise<PdfJsLib>;
@@ -381,6 +392,132 @@ function parseDanfeItems(lines: string[]) {
   return items;
 }
 
+function buildPdfRows(items: Array<{ str?: string; transform?: number[] }>) {
+  const tokens = items
+    .map(item => ({
+      text: (item.str ?? "").trim(),
+      x: item.transform?.[4] ?? 0,
+      y: item.transform?.[5] ?? 0
+    }))
+    .filter(item => item.text.length > 0)
+    .sort((a, b) => {
+      const yDiff = b.y - a.y;
+      if (Math.abs(yDiff) > 2) {
+        return yDiff;
+      }
+
+      return a.x - b.x;
+    });
+
+  const rows: PositionedRow[] = [];
+  for (const token of tokens) {
+    const row = rows.find(current => Math.abs(current.y - token.y) <= 2);
+    if (row) {
+      row.tokens.push(token);
+    } else {
+      rows.push({ y: token.y, tokens: [token] });
+    }
+  }
+
+  for (const row of rows) {
+    row.tokens.sort((a, b) => a.x - b.x);
+  }
+
+  return rows;
+}
+
+function rowText(row: PositionedRow) {
+  return row.tokens.map(token => token.text).join(" ");
+}
+
+function parseDanfeItemRow(row: PositionedRow) {
+  const codeIndex = row.tokens.findIndex(token => /^\d{4,}$/.test(extractDigits(token.text)));
+  if (codeIndex < 0) {
+    return null;
+  }
+
+  const ncmIndex = row.tokens.findIndex((token, index) => index > codeIndex && isNcmToken(token.text));
+  if (ncmIndex < 0) {
+    return null;
+  }
+
+  const cstToken = row.tokens[ncmIndex + 1]?.text ?? "";
+  const cfopToken = row.tokens[ncmIndex + 2]?.text ?? "";
+  const unitToken = row.tokens[ncmIndex + 3]?.text ?? "";
+  const quantityToken = row.tokens[ncmIndex + 4]?.text ?? "";
+  const unitPriceToken = row.tokens[ncmIndex + 5]?.text ?? "";
+  const totalToken = row.tokens[ncmIndex + 6]?.text ?? "";
+
+  if (!isCstToken(cstToken) || !isCfopToken(cfopToken) || !isUnitToken(unitToken) || !isQuantityToken(quantityToken) || !isMoneyToken(unitPriceToken) || !isMoneyToken(totalToken)) {
+    return null;
+  }
+
+  const description = row.tokens
+    .slice(codeIndex + 1, ncmIndex)
+    .map(token => token.text)
+    .join(" ")
+    .trim();
+
+  if (!description) {
+    return null;
+  }
+
+  return {
+    codigo_produto: row.tokens[codeIndex].text.trim(),
+    descricao: description,
+    ncm: extractDigits(row.tokens[ncmIndex].text),
+    cst: cstToken.trim(),
+    cfop: cfopToken.trim(),
+    unidade: unitToken.trim(),
+    quantidade: quantityToken.trim(),
+    qtde: quantityToken.trim(),
+    valor_unitario: normalizeMoneyValue(unitPriceToken),
+    valor_total_item: normalizeMoneyValue(totalToken)
+  } satisfies Record<string, unknown>;
+}
+
+function parseDanfeItemsFromRows(rows: PositionedRow[]) {
+  const items: Array<Record<string, unknown>> = [];
+  const headerIndex = rows.findIndex(row => /cod(?:\.|igo)?\s*prod/i.test(rowText(row)) && /descricao/i.test(rowText(row)));
+  if (headerIndex < 0) {
+    return items;
+  }
+
+  let lastItem: Record<string, unknown> | null = null;
+  for (let index = headerIndex + 1; index < rows.length; index += 1) {
+    const row = rows[index];
+    const text = rowText(row);
+    if (!text) {
+      continue;
+    }
+
+    if (isDanfeItemsFooter(text)) {
+      break;
+    }
+
+    const parsed = parseDanfeItemRow(row);
+    if (parsed) {
+      items.push(parsed);
+      lastItem = parsed;
+      continue;
+    }
+
+    if (!lastItem) {
+      continue;
+    }
+
+    const firstX = row.tokens[0]?.x ?? Number.MAX_SAFE_INTEGER;
+    const looksLikeDescriptionContinuation = firstX < 190 && !row.tokens.some(token => isNcmToken(token.text) || isCfopToken(token.text));
+    if (!looksLikeDescriptionContinuation) {
+      continue;
+    }
+
+    lastItem.descricao = cleanupValue(`${onlyText(lastItem.descricao)} ${text}`);
+  }
+
+  return items;
+}
+
 function findFallbackAddress(text: string, companyName: string, cep: string) {
   if (!companyName || !cep) {
     return "";
@@ -456,7 +593,7 @@ async function enrichAddressByCep(fields: Record<string, unknown>) {
   return fields;
 }
 
-function parseDanfeText(text: string): DanfeReadResult {
+function parseDanfeText(text: string, rows: PositionedRow[] = []): DanfeReadResult {
   const fields: Record<string, unknown> = {};
   const normalized = normalizeText(text);
   const lines = splitLines(text);
@@ -487,11 +624,18 @@ function parseDanfeText(text: string): DanfeReadResult {
   const fallbackAddress = findFallbackAddress(normalized, emitenteName, cep);
   setAliases(fields, "emitente_endereco", fallbackAddress, ["endereco"]);
 
-  const items = parseDanfeItems(lines);
+  const items = parseDanfeItemsFromRows(rows);
   if (items.length > 0) {
     fields.itens = items;
     fields.items = items;
     fields.produtos = items;
+  } else {
+    const fallbackItems = parseDanfeItems(lines);
+    if (fallbackItems.length > 0) {
+      fields.itens = fallbackItems;
+      fields.items = fallbackItems;
+      fields.produtos = fallbackItems;
+    }
   }
 
   return { fields, warnings: [] };
@@ -577,19 +721,22 @@ async function extractPdfTextInBrowser(file: File) {
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjsLib.getDocument({ data }).promise;
   const pages: string[] = [];
+  const rows: PositionedRow[] = [];
 
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
     const content = await page.getTextContent();
-    pages.push(buildPdfLines(content.items).join("\n"));
+    const pageRows = buildPdfRows(content.items);
+    rows.push(...pageRows);
+    pages.push(pageRows.map(row => rowText(row)).join("\n"));
   }
 
-  return pages.join("\n");
+  return { text: pages.join("\n"), rows };
 }
 
 export async function readDanfeInBrowser(file: File): Promise<DanfeReadResult> {
-  const text = await extractPdfTextInBrowser(file);
-  const result = parseDanfeText(text);
+  const { text, rows } = await extractPdfTextInBrowser(file);
+  const result = parseDanfeText(text, rows);
   const fields = await enrichAddressByCep(result.fields);
 
   return { ...result, fields };
