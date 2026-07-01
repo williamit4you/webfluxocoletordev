@@ -211,6 +211,39 @@ function extractEmitenteInscricaoEstadual(text: string, cnpj: string) {
   return beforeCnpj.slice(-12);
 }
 
+function splitEmitenteAddressBlock(addressBlock: string, municipio?: string) {
+  const cleaned = addressBlock.trim();
+  if (!cleaned) {
+    return { endereco: "", bairro: "", municipio: municipio?.trim() ?? "" };
+  }
+
+  let working = cleaned;
+  let resolvedMunicipio = municipio?.trim() ?? "";
+  const stateMatch = working.match(/\s*-\s*([A-Z]{2})\s*$/);
+  if (stateMatch) {
+    working = working.slice(0, stateMatch.index).trim();
+  }
+
+  if (resolvedMunicipio) {
+    const normalizedWorking = normalizeReaderToken(working);
+    const normalizedMunicipio = normalizeReaderToken(resolvedMunicipio);
+    if (normalizedMunicipio && normalizedWorking.endsWith(normalizedMunicipio)) {
+      working = working.slice(0, Math.max(0, working.length - resolvedMunicipio.length)).trim();
+    }
+  }
+
+  const lastSeparator = working.lastIndexOf(" - ");
+  if (lastSeparator < 0) {
+    return { endereco: working, bairro: "", municipio: resolvedMunicipio };
+  }
+
+  return {
+    endereco: working.slice(0, lastSeparator).trim(),
+    bairro: working.slice(lastSeparator + 3).trim(),
+    municipio: resolvedMunicipio
+  };
+}
+
 function findLineValue(lines: string[], labelPatterns: RegExp[], fallbackPatterns: RegExp[] = []) {
   for (const pattern of fallbackPatterns) {
     const direct = findRegexValue(lines.join("\n"), [pattern]);
@@ -291,6 +324,7 @@ function parseDanfeItems(lines: string[]) {
 async function enrichReaderData(fields: Record<string, unknown>) {
   const next = { ...fields };
   const cep = extractDigits(toText(fields.cep));
+  const addressBlock = toText(fields._emitente_address_block);
 
   if (cep.length === 8) {
     try {
@@ -325,12 +359,44 @@ async function enrichReaderData(fields: Record<string, unknown>) {
           if (data.uf) {
             next.estado = data.uf;
           }
+
+          if (addressBlock) {
+            const parts = splitEmitenteAddressBlock(addressBlock, data.localidade);
+            if (parts.endereco) {
+              next.endereco = parts.endereco;
+            }
+
+            if (parts.bairro) {
+              next.bairro = parts.bairro;
+            }
+
+            if (parts.municipio) {
+              next.municipio = parts.municipio;
+            }
+          }
         }
       }
     } catch {
       // Keep the extracted values when the CEP lookup is unavailable.
     }
   }
+
+  if (addressBlock && (!toText(next.endereco) || !toText(next.bairro) || !toText(next.municipio))) {
+    const parts = splitEmitenteAddressBlock(addressBlock, toText(next.municipio));
+    if (parts.endereco && !toText(next.endereco)) {
+      next.endereco = parts.endereco;
+    }
+
+    if (parts.bairro && !toText(next.bairro)) {
+      next.bairro = parts.bairro;
+    }
+
+    if (parts.municipio && !toText(next.municipio)) {
+      next.municipio = parts.municipio;
+    }
+  }
+
+  delete next._emitente_address_block;
 
   return next;
 }
@@ -426,6 +492,23 @@ function parseDanfeText(text: string) {
   if (dataEmissao) {
     fields.data_emissao = dataEmissao;
     fields.dataEmissao = dataEmissao;
+  }
+
+  const simplifiedEmitenteCepBlock = emitente
+    ? compactText.match(new RegExp(`${escapeRegExp(emitente)}\\s+(.+?)\\s*-\\s*CEP:\\s*([0-9]{8})\\s*([0-9]{2}\\/[0-9]{2}\\/[0-9]{4})`, "i"))
+    : null;
+  if (simplifiedEmitenteCepBlock) {
+    fields._emitente_address_block = simplifiedEmitenteCepBlock[1].trim();
+    fields.cep = simplifiedEmitenteCepBlock[2].trim();
+    fields.data_emissao = simplifiedEmitenteCepBlock[3].trim();
+    fields.dataEmissao = simplifiedEmitenteCepBlock[3].trim();
+
+    const simplifiedState = findRegexValue(simplifiedEmitenteCepBlock[1], [
+      /([A-Z]{2})\s*$/i
+    ]);
+    if (simplifiedState) {
+      fields.estado = simplifiedState;
+    }
   }
 
   const valorProdutos = findRegexValue(compactText, [
