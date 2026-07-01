@@ -1,6 +1,7 @@
 "use client";
 
 import { api } from "@/lib/api";
+import { readDanfeInBrowser as readDanfeFileInBrowser } from "@/lib/danfeReader";
 import type { ExecutionField, FieldOption, Flow, Instance, StepApiConfig } from "@/lib/types";
 import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Paperclip, Play, RotateCw, Save, Square } from "lucide-react";
 import Link from "next/link";
@@ -1713,11 +1714,10 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     setReaderWarning("");
 
     try {
-      const result = await readDanfeInBrowser(file);
-      const enrichedFields = await enrichReaderData(result.fields);
-      const matchedFields = applyReaderData(enrichedFields);
+      const result = await readDanfeFileInBrowser(file);
+      const matchedFields = applyReaderData(result.fields);
       const warnings = [...result.warnings];
-      if (!matchedFields && Object.keys(enrichedFields).length > 0) {
+      if (!matchedFields && Object.keys(result.fields).length > 0) {
         warnings.push("Os dados foram lidos, mas nao combinaram com os campos configurados nesta etapa.");
       }
 
