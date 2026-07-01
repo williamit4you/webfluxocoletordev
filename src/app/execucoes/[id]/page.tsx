@@ -183,6 +183,34 @@ function findRegexValue(text: string, patterns: RegExp[]) {
   return "";
 }
 
+function extractHighestCurrency(text: string) {
+  const values = Array.from(text.matchAll(/\d{1,3}(?:\.\d{3})*,\d{2}/g))
+    .map(match => match[0])
+    .map(raw => ({ raw, value: Number(raw.replace(/\./g, "").replace(",", ".")) }))
+    .filter(item => !Number.isNaN(item.value));
+
+  if (values.length === 0) {
+    return "";
+  }
+
+  return values.sort((left, right) => right.value - left.value)[0].raw;
+}
+
+function extractEmitenteInscricaoEstadual(text: string, cnpj: string) {
+  const cnpjIndex = text.indexOf(cnpj);
+  if (cnpjIndex < 0) {
+    return "";
+  }
+
+  const windowStart = Math.max(0, cnpjIndex - 32);
+  const beforeCnpj = extractDigits(text.slice(windowStart, cnpjIndex));
+  if (beforeCnpj.length < 12) {
+    return "";
+  }
+
+  return beforeCnpj.slice(-12);
+}
+
 function findLineValue(lines: string[], labelPatterns: RegExp[], fallbackPatterns: RegExp[] = []) {
   for (const pattern of fallbackPatterns) {
     const direct = findRegexValue(lines.join("\n"), [pattern]);
@@ -332,70 +360,40 @@ function parseDanfeText(text: string) {
     fields.cnpjEmitente = cnpj;
   }
 
-  const inscricaoEstadual = findRegexValue(compactText, [
-    /TERCEIROS TP:?\s*([0-9]{8,14})/i,
-    /OPERAÇÃOINSCRIÇÃO ESTADUALINSC\.ESTADUAL DO SUBST\. TRIBUTÁRIOCNPJ.*?([0-9]{8,14})\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/i
-  ]);
+  const inscricaoEstadual = cnpj ? extractEmitenteInscricaoEstadual(compactText, cnpj) : "";
   if (inscricaoEstadual) {
     fields.inscricao_estadual = inscricaoEstadual;
     fields.inscricaoEstadual = inscricaoEstadual;
   }
 
-  const dataEmissao = findRegexValue(compactText, [
-    /DATA (?:DE )?EMISSAO[:\s]*([0-9]{2}\/[0-9]{2}\/[0-9]{4})/i
-  ]);
-  if (dataEmissao) {
-    fields.data_emissao = dataEmissao;
-    fields.dataEmissao = dataEmissao;
-  }
+  const emitenteBlockMatch = emitente
+    ? compactText.match(new RegExp(`${escapeRegExp(emitente)}\\s+(.+?)\\s+([A-ZÀ-Ú\\s]+?)\\s+-\\s+([A-Z]{2})\\s+-\\s+CEP:\\s*([0-9]{8})\\s+([0-9]{2}\\/[0-9]{2}\\/[0-9]{4})`, "i"))
+    : null;
 
-  const emitenteAddressBlock = emitente
-    ? findRegexValue(compactText, [
-      new RegExp(`${escapeRegExp(emitente)}(.+?)CEP:\\s*([0-9]{8})`, "i")
-    ])
-    : "";
-  const endereco = emitenteAddressBlock
-    ? emitenteAddressBlock
-      .replace(/\d{2}\/\d{2}\/\d{4}.*/i, "")
-      .replace(/\s+[A-Z]{2}\s*-\s*CEP\s*:?\s*[0-9-]+/i, "")
-      .split(/\s-\s/)
-      .slice(0, 1)
-      .join(" ")
-      .trim()
-    : findLineValue(lines, [/^endereco$/i, /^logradouro$/i], [
-      /ENDERECO[:\s]*(.+?)(?=\s+BAIRRO|\s+CEP|\s+MUNICIPIO)/i
-    ]);
+  const rawAddressBlock = emitenteBlockMatch?.[1]?.trim() ?? "";
+  const lastHyphenIndex = rawAddressBlock.lastIndexOf(" - ");
+  const endereco = lastHyphenIndex > 0
+    ? rawAddressBlock.slice(0, lastHyphenIndex).trim()
+    : rawAddressBlock;
   if (endereco) {
     fields.endereco = endereco;
   }
 
-  const bairro = emitenteAddressBlock
-    ? emitenteAddressBlock
-      .replace(/\d{2}\/\d{2}\/\d{4}.*/i, "")
-      .replace(/^.*?\s-\s/, "")
-      .replace(/[A-Z\s]+?\s*-\s*[A-Z]{2}\s*-\s*CEP.*/i, "")
-      .trim()
-    : findLineValue(lines, [/^bairro/i, /distrito/i], [
-      /BAIRRO(?:\s*\/\s*DISTRITO)?[:\s]*(.+?)(?=\s+CEP|\s+MUNICIPIO|\s+UF)/i
-    ]);
+  const bairro = lastHyphenIndex > 0
+    ? rawAddressBlock.slice(lastHyphenIndex + 3).trim()
+    : "";
   if (bairro) {
     fields.bairro = bairro;
   }
 
-  const cep = findRegexValue(compactText, [
+  const cep = emitenteBlockMatch?.[4]?.trim() ?? findRegexValue(compactText, [
     /CEP[:\s]*([0-9]{5}-?[0-9]{3})/i
   ]);
   if (cep) {
     fields.cep = cep;
   }
 
-  const municipio = emitenteAddressBlock
-    ? findRegexValue(emitenteAddressBlock, [
-      /([A-ZÀ-Ú\s]+)\s*-\s*[A-Z]{2}\s*-\s*CEP/i
-    ])
-    : findLineValue(lines, [/^municipio$/i, /^cidade$/i], [
-      /MUNICIPIO[:\s]*(.+?)(?=\s+FONE|\s+UF|\s+INSCRI)/i
-    ]);
+  const municipio = emitenteBlockMatch?.[2]?.trim() ?? "";
   if (municipio) {
     fields.municipio = municipio;
   }
@@ -407,7 +405,7 @@ function parseDanfeText(text: string) {
     fields.telefone = telefone;
   }
 
-  const estado = findRegexValue(compactText, [
+  const estado = emitenteBlockMatch?.[3]?.trim() ?? findRegexValue(compactText, [
     /([A-Z]{2})\s*-\s*CEP:\s*[0-9]{8}/i,
     /\bUF[:\s]*([A-Z]{2})\b/i
   ]);
@@ -415,12 +413,23 @@ function parseDanfeText(text: string) {
     fields.estado = estado;
   }
 
+  const dataEmissao = emitenteBlockMatch?.[5]?.trim() ?? findRegexValue(compactText, [
+    /DATA (?:DE )?EMISSAO[:\s]*([0-9]{2}\/[0-9]{2}\/[0-9]{4})/i
+  ]);
+  if (dataEmissao) {
+    fields.data_emissao = dataEmissao;
+    fields.dataEmissao = dataEmissao;
+  }
+
   const valorProdutos = findRegexValue(compactText, [
     /([0-9.]+,[0-9]{2})\s*VALOR TOTAL DOS PRODUTOS/i,
     /VALOR TOTAL DOS PRODUTOS[:\s]*([0-9.]+,[0-9]{2})/i
   ]);
-  if (valorProdutos) {
-    fields.valor_total_dos_produtos = valorProdutos;
+  const normalizedValorProdutos = valorProdutos && valorProdutos !== "0,00"
+    ? valorProdutos
+    : extractHighestCurrency(compactText);
+  if (normalizedValorProdutos) {
+    fields.valor_total_dos_produtos = normalizedValorProdutos;
   }
 
   const valorNota = findRegexValue(compactText, [
@@ -428,11 +437,14 @@ function parseDanfeText(text: string) {
     /VALOR TOTAL DA NOTA[:\s]*([0-9.]+,[0-9]{2})/i,
     /VALOR TOTAL[:\s]*([0-9.]+,[0-9]{2})/i
   ]);
-  if (valorNota) {
-    fields.valor_total_da_nota = valorNota;
-    fields.valorTotal = valorNota;
+  const normalizedValorNota = valorNota && valorNota !== "0,00"
+    ? valorNota
+    : extractHighestCurrency(compactText);
+  if (normalizedValorNota) {
+    fields.valor_total_da_nota = normalizedValorNota;
+    fields.valorTotal = normalizedValorNota;
     if (!fields.valor_total_dos_produtos) {
-      fields.valor_total_dos_produtos = valorNota;
+      fields.valor_total_dos_produtos = normalizedValorNota;
     }
   }
 
