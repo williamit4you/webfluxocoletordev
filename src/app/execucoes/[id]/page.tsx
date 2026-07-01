@@ -60,20 +60,20 @@ function normalizeReaderToken(value: string) {
 }
 
 const readerAliasGroups: ReadonlyArray<ReadonlyArray<string>> = [
-  ["chaveacesso", "chave", "chavenfe", "chavedeacesso", "accesskey"],
-  ["numeronfe", "numerodanota", "numerodocumento", "numero", "nfe"],
-  ["serie"],
-  ["emitente", "razaosocial", "razaosocialemitente", "fornecedor", "nomeemitente"],
-  ["cnpj", "cnpjemitente", "documentoemitente", "cpfcnpj", "cpfcnpjemitente"],
-  ["inscricaoestadual", "ie", "ieemitente", "inscestadual"],
-  ["dataemissao", "emissao", "data"],
-  ["endereco", "logradouro", "rua", "enderecocompleto"],
-  ["bairro"],
-  ["cep"],
-  ["municipio", "cidade", "localidade"],
-  ["estado", "uf"],
-  ["telefone", "fone", "celular", "contato"],
-  ["valortotal", "valortotaldanota", "totalnota", "valornota"],
+  ["chaveacesso", "chave", "chavenfe", "chavedeacesso", "accesskey", "nfechaveacesso"],
+  ["numeronfe", "numerodanota", "numerodocumento", "numero", "nfe", "nfenumero"],
+  ["serie", "nfeserie"],
+  ["emitente", "razaosocial", "razaosocialemitente", "fornecedor", "nomeemitente", "emitenterazaosocial", "razaosocialdoemitente"],
+  ["cnpj", "cnpjemitente", "documentoemitente", "cpfcnpj", "cpfcnpjemitente", "emitentecnpj", "cnpjdoemitente"],
+  ["inscricaoestadual", "ie", "ieemitente", "inscestadual", "emitenteinscricaoestadual", "inscricaoestadualdoemitente"],
+  ["dataemissao", "emissao", "data", "nfedataemissao", "datadeemissao"],
+  ["endereco", "logradouro", "rua", "enderecocompleto", "emitenteendereco", "enderecodoemitente"],
+  ["bairro", "emitentebairro", "bairrodoemitente"],
+  ["cep", "emitentecep", "cepdoemitente"],
+  ["municipio", "cidade", "localidade", "emitentemunicipio", "municipiodoemitente"],
+  ["estado", "uf", "emitenteuf", "ufdoemitente"],
+  ["telefone", "fone", "celular", "contato", "emitentetelefone", "telefonedoemitente"],
+  ["valortotal", "valortotaldanota", "totalnota", "valornota", "totalnotafiscal"],
   ["valortotaldosprodutos", "totalprodutos", "valorprodutos"],
   ["itens", "produtos"]
 ];
@@ -326,6 +326,10 @@ async function enrichReaderData(fields: Record<string, unknown>) {
   const cep = extractDigits(toText(fields.cep));
   const addressBlock = toText(fields._emitente_address_block);
 
+  if (addressBlock && !toText(next.endereco)) {
+    next.endereco = addressBlock;
+  }
+
   if (cep.length === 8) {
     try {
       const response = await fetch(`/api/cep/${cep}`);
@@ -383,7 +387,7 @@ async function enrichReaderData(fields: Record<string, unknown>) {
 
   if (addressBlock && (!toText(next.endereco) || !toText(next.bairro) || !toText(next.municipio))) {
     const parts = splitEmitenteAddressBlock(addressBlock, toText(next.municipio));
-    if (parts.endereco && !toText(next.endereco)) {
+    if (parts.endereco && (!toText(next.endereco) || toText(next.endereco) === addressBlock)) {
       next.endereco = parts.endereco;
     }
 

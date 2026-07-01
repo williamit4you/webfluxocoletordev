@@ -101,6 +101,73 @@ function createField(): Field {
   return { label: "", key: "", type: 0, mask: "", required: false, order: 1, options: [] };
 }
 
+function createTemplateField(label: string, key: string, type = 0, mask = "", required = false, options: FieldOption[] = []): Field {
+  return { label, key, type, mask, required, order: 1, options };
+}
+
+function createTemplateOption(label: string, key: string, type = 0, mask = "", required = false): FieldOption {
+  return { label, value: key, key, type, mask, required, order: 1 };
+}
+
+const danfeItemOptions: FieldOption[] = [
+  createTemplateOption("Codigo do produto", "codigo_produto"),
+  createTemplateOption("Descricao", "descricao"),
+  createTemplateOption("NCM", "ncm"),
+  createTemplateOption("CST", "cst"),
+  createTemplateOption("CFOP", "cfop"),
+  createTemplateOption("Unidade", "unidade"),
+  createTemplateOption("Quantidade", "quantidade", 1),
+  createTemplateOption("Valor unitario", "valor_unitario", 1, "valor"),
+  createTemplateOption("Valor total item", "valor_total_item", 1, "valor"),
+  createTemplateOption("Base ICMS", "base_icms", 1, "valor"),
+  createTemplateOption("Valor ICMS", "valor_icms", 1, "valor"),
+  createTemplateOption("Valor IPI", "valor_ipi", 1, "valor"),
+  createTemplateOption("Aliquota ICMS", "aliquota_icms", 1),
+  createTemplateOption("Aliquota IPI", "aliquota_ipi", 1)
+];
+
+const danfeTemplateFields: Field[] = [
+  createTemplateField("Chave de acesso", "nfe_chave_acesso", 0, "", true),
+  createTemplateField("Numero da NF-e", "nfe_numero", 0, "", true),
+  createTemplateField("Serie", "nfe_serie"),
+  createTemplateField("Natureza da operacao", "nfe_natureza_operacao"),
+  createTemplateField("Data de emissao", "nfe_data_emissao", 2),
+  createTemplateField("Data de saida/entrada", "nfe_data_saida_entrada", 2),
+  createTemplateField("Hora de saida/entrada", "nfe_hora_saida_entrada"),
+  createTemplateField("Protocolo de autorizacao", "nfe_protocolo_autorizacao"),
+  createTemplateField("Situacao da NF-e", "nfe_situacao"),
+  createTemplateField("CNPJ do emitente", "emitente_cnpj", 0, "cnpj", true),
+  createTemplateField("Razao social do emitente", "emitente_razao_social"),
+  createTemplateField("Inscricao estadual do emitente", "emitente_inscricao_estadual"),
+  createTemplateField("Endereco do emitente", "emitente_endereco"),
+  createTemplateField("Bairro do emitente", "emitente_bairro"),
+  createTemplateField("CEP do emitente", "emitente_cep", 0, "cep"),
+  createTemplateField("Municipio do emitente", "emitente_municipio"),
+  createTemplateField("UF do emitente", "emitente_uf"),
+  createTemplateField("Telefone do emitente", "emitente_telefone", 0, "telefone"),
+  createTemplateField("CNPJ/CPF do destinatario", "destinatario_cnpj_cpf"),
+  createTemplateField("Razao social do destinatario", "destinatario_razao_social"),
+  createTemplateField("Inscricao estadual do destinatario", "destinatario_inscricao_estadual"),
+  createTemplateField("Endereco do destinatario", "destinatario_endereco"),
+  createTemplateField("Bairro do destinatario", "destinatario_bairro"),
+  createTemplateField("CEP do destinatario", "destinatario_cep", 0, "cep"),
+  createTemplateField("Municipio do destinatario", "destinatario_municipio"),
+  createTemplateField("UF do destinatario", "destinatario_uf"),
+  createTemplateField("Telefone do destinatario", "destinatario_telefone", 0, "telefone"),
+  createTemplateField("Base de calculo do ICMS", "total_base_icms", 1, "valor"),
+  createTemplateField("Valor do ICMS", "total_valor_icms", 1, "valor"),
+  createTemplateField("Base de calculo do ICMS ST", "total_base_icms_st", 1, "valor"),
+  createTemplateField("Valor do ICMS ST", "total_valor_icms_st", 1, "valor"),
+  createTemplateField("Valor total dos produtos", "total_produtos", 1, "valor"),
+  createTemplateField("Valor do frete", "total_frete", 1, "valor"),
+  createTemplateField("Valor do seguro", "total_seguro", 1, "valor"),
+  createTemplateField("Desconto", "total_desconto", 1, "valor"),
+  createTemplateField("Outras despesas acessorias", "total_outras_despesas", 1, "valor"),
+  createTemplateField("Valor do IPI", "total_ipi", 1, "valor"),
+  createTemplateField("Valor total da nota", "total_nota", 1, "valor"),
+  createTemplateField("Itens", "itens", 5, "", false, danfeItemOptions)
+];
+
 function createApiConfig(): StepApiConfig {
   return { validateTls: true, method: "GET", scheduleMode: "manual", sendFieldKeys: [], responseMappings: [], bodyMappings: [], headers: [], bodyTemplate: "", retryOnEmptyArray: false, emptyArrayRetryMinutes: 3, emptyArrayAction: "advance", responseRule: createResponseRule() };
 }
@@ -1074,6 +1141,53 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
       : step));
   }
 
+  function applyDanfeTemplate(stepIndex: number) {
+    setSteps(current => {
+      const keysInOtherSteps = new Set(
+        current
+          .filter((_, currentStepIndex) => currentStepIndex !== stepIndex)
+          .flatMap(step => step.fields.map(field => field.key))
+      );
+
+      return current.map((step, currentStepIndex) => {
+        if (currentStepIndex !== stepIndex) {
+          return step;
+        }
+
+        const existingKeys = new Set(step.fields.map(field => field.key));
+        const nextFields = step.fields.map(field => {
+          if (field.key !== "itens") {
+            return field;
+          }
+
+          const existingOptionKeys = new Set(field.options.map(option => option.key ?? option.value));
+          const missingOptions = danfeItemOptions
+            .filter(option => !existingOptionKeys.has(option.key ?? option.value))
+            .map((option, index) => ({ ...option, order: field.options.length + index + 1 }));
+
+          return missingOptions.length > 0
+            ? { ...field, type: 5, options: [...field.options, ...missingOptions] }
+            : field;
+        });
+
+        const missingFields = danfeTemplateFields
+          .filter(field => !existingKeys.has(field.key) && !keysInOtherSteps.has(field.key))
+          .map((field, index) => ({
+            ...field,
+            order: nextFields.length + index + 1,
+            options: field.options.map((option, optionIndex) => ({ ...option, order: optionIndex + 1 }))
+          }));
+
+        return {
+          ...step,
+          name: step.name || "Leitura DANFE / NF-e",
+          type: 0,
+          fields: [...nextFields, ...missingFields]
+        };
+      });
+    });
+  }
+
   function toggleFlowUser(userId: string) {
     setAssignedUserIds(current => current.includes(userId)
       ? current.filter(id => id !== userId)
@@ -1789,10 +1903,16 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
             description="Esses campos aparecem quando a etapa precisa capturar dados."
             open={openSections.fields}
             onToggle={() => toggleSection("fields")}
-            actions={<button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => updateStep(editingStep, { fields: [...currentStep.fields, createField()] })}>
-              <Plus size={16} />
-              Adicionar campo
-            </button>}
+            actions={<div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => applyDanfeTemplate(editingStep)}>
+                <Copy size={16} />
+                Template DANFE
+              </button>
+              <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => updateStep(editingStep, { fields: [...currentStep.fields, createField()] })}>
+                <Plus size={16} />
+                Adicionar campo
+              </button>
+            </div>}
           >
             <div className="builder">
               {currentStep.fields.length === 0 && <div className="empty compact">Nenhum campo cadastrado nesta etapa.</div>}
