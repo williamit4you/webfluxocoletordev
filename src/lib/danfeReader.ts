@@ -43,6 +43,13 @@ function cleanupValue(value: string) {
   return value.replace(/\s+/g, " ").replace(/\s+([,.;:/-])/g, "$1").trim();
 }
 
+function splitLines(text: string) {
+  return text
+    .split(/\r?\n/)
+    .map(line => cleanupValue(line))
+    .filter(Boolean);
+}
+
 function normalizeNumericIdentifier(value: string) {
   const digits = extractDigits(value);
   if (!digits) {
@@ -233,6 +240,45 @@ function findNaturezaOperacao(text: string) {
   ]);
 }
 
+function parseDanfeItems(lines: string[]) {
+  const items: Array<Record<string, unknown>> = [];
+  const startIndex = lines.findIndex(line => /codigo\s+produto|cod(?:igo)?\s+prod/i.test(line) && /descricao/i.test(line));
+  if (startIndex < 0) {
+    return items;
+  }
+
+  for (let index = startIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (!line) {
+      continue;
+    }
+
+    if (/dados adicionais|calculo do imposto|transportador|cobranca|informacoes complementares/i.test(line)) {
+      break;
+    }
+
+    const match = line.match(/^(\S+)\s+(.+?)\s+(\d{4}\.?\d{2}\.?\d{2}|\d{8})\s+([0-9]{2,3})\s+([0-9]{4})\s+([A-Z]{1,4}|UN|PC|KG|CX|LT|SC)?\s*([0-9.,]+)\s+([0-9.,]+)\s+([0-9.,]+)$/i);
+    if (!match) {
+      continue;
+    }
+
+    items.push({
+      codigo_produto: match[1].trim(),
+      descricao: match[2].trim(),
+      ncm: match[3].trim(),
+      cst: match[4].trim(),
+      cfop: match[5].trim(),
+      unidade: match[6]?.trim() ?? "",
+      quantidade: match[7].trim(),
+      qtde: match[7].trim(),
+      valor_unitario: match[8].trim(),
+      valor_total_item: match[9].trim()
+    });
+  }
+
+  return items;
+}
+
 function findFallbackAddress(text: string, companyName: string, cep: string) {
   if (!companyName || !cep) {
     return "";
@@ -311,6 +357,7 @@ async function enrichAddressByCep(fields: Record<string, unknown>) {
 function parseDanfeText(text: string): DanfeReadResult {
   const fields: Record<string, unknown> = {};
   const normalized = normalizeText(text);
+  const lines = splitLines(text);
   const accessKey = findAccessKey(normalized);
   const emitenteName = findEmitenteName(normalized);
   const emitenteCnpj = findEmitenteCnpj(normalized);
@@ -337,6 +384,13 @@ function parseDanfeText(text: string): DanfeReadResult {
 
   const fallbackAddress = findFallbackAddress(normalized, emitenteName, cep);
   setAliases(fields, "emitente_endereco", fallbackAddress, ["endereco"]);
+
+  const items = parseDanfeItems(lines);
+  if (items.length > 0) {
+    fields.itens = items;
+    fields.items = items;
+    fields.produtos = items;
+  }
 
   return { fields, warnings: [] };
 }

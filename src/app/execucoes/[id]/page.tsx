@@ -573,7 +573,7 @@ function parseDanfeText(text: string) {
 
   const warnings: string[] = [];
   if (Object.keys(fields).length === 0) {
-    warnings.push("Nao foi possivel identificar dados da nota no navegador. Confirme se o PDF possui texto selecionavel.");
+    warnings.push("Não foi possível identificar dados da nota no navegador. Confirme se o PDF possui texto selecionável.");
   }
 
   return { fields, warnings };
@@ -590,7 +590,7 @@ async function loadPdfJs() {
       if (existingScript) {
         existingScript.addEventListener("load", () => {
           if (!window.pdfjsLib) {
-            reject(new Error("Biblioteca de leitura de PDF nao ficou disponivel."));
+            reject(new Error("Biblioteca de leitura de PDF não ficou disponível."));
             return;
           }
 
@@ -607,7 +607,7 @@ async function loadPdfJs() {
       script.dataset.pdfjs = "reader";
       script.onload = () => {
         if (!window.pdfjsLib) {
-          reject(new Error("Biblioteca de leitura de PDF nao ficou disponivel."));
+          reject(new Error("Biblioteca de leitura de PDF não ficou disponível."));
           return;
         }
 
@@ -712,7 +712,7 @@ function PreviewBlock({ title, value }: { title?: string; value: unknown }) {
       </div>
       {isLarge && (
         <button className="btn btn-ghost btn-inline preview-toggle" type="button" onClick={() => setExpanded(current => !current)}>
-          {expanded ? "Recolher conteudo" : "Expandir conteudo"}
+          {expanded ? "Recolher conteúdo" : "Expandir conteúdo"}
         </button>
       )}
     </div>
@@ -865,7 +865,7 @@ function describeAutomaticSchedule(
     if (!intervalMinutes) {
       return {
         label: "Agendamento em intervalo",
-        detail: scheduleValue || "Intervalo nao informado",
+        detail: scheduleValue || "Intervalo não informado",
         nextAt: null as Date | null
       };
     }
@@ -889,7 +889,7 @@ function describeAutomaticSchedule(
     const nextAt = getNextCronOccurrence(scheduleValue);
     return {
       label: "Agendamento cron",
-      detail: scheduleValue || "Expressao cron nao informada",
+      detail: scheduleValue || "Expressão cron não informada",
       nextAt
     };
   }
@@ -906,7 +906,7 @@ function formatTechnicalDataLabel(key: string) {
     case "_integration.url":
       return "URL";
     case "_integration.durationMs":
-      return "Duracao (ms)";
+      return "Duração (ms)";
     case "_integration.executedAtUtc":
       return "Executado em";
     case "_integration.statusCode":
@@ -920,7 +920,7 @@ function formatTechnicalDataLabel(key: string) {
     case "_integration.errorMessage":
       return "Erro";
     case "_integration.awaitingData":
-      return "Aguardando retorno com conteudo";
+      return "Aguardando retorno com conteúdo";
     case "_integration.awaitingDataMessage":
       return "Status da consulta";
     case "_integration.emptyResultRetryMinutes":
@@ -950,7 +950,7 @@ function formatTechnicalDataLabel(key: string) {
     case "_integration.responseRule.maxAttempts":
       return "Limite de tentativas";
     case "_integration.responseRule.nextAttemptAtUtc":
-      return "Proxima tentativa";
+      return "Próxima tentativa";
     case "_integration.mappingWarning":
       return "Aviso do mapeamento";
     case "_integration.mappingResult":
@@ -1058,6 +1058,34 @@ function sanitizeStructuredListValue(field: ExecutionField, value: unknown) {
         .filter((key): key is string => !!key)
         .map(key => [key, toText(row[key]).trim()])
     ))
+    .filter(row => rowHasContent(row, field));
+}
+
+function mapStructuredReaderRows(field: ExecutionField, value: unknown) {
+  const rows = parseStructuredRows(value);
+  if (rows.length === 0) {
+    return [] as Array<Record<string, unknown>>;
+  }
+
+  return rows
+    .map(row => {
+      const mappedRow = Object.fromEntries(
+        field.options
+          .map(option => option.key?.trim())
+          .filter((key): key is string => !!key)
+          .map(optionKey => {
+            const candidates = expandReaderAliases(optionKey);
+            const match = Object.entries(row).find(([rowKey]) => {
+              const aliases = expandReaderAliases(rowKey);
+              return [...aliases].some(alias => candidates.has(alias));
+            });
+
+            return [optionKey, match?.[1] ?? ""];
+          })
+      );
+
+      return mappedRow;
+    })
     .filter(row => rowHasContent(row, field));
 }
 
@@ -1476,7 +1504,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       return false;
     }
 
-    window.alert("Voce concluiu sua tarefa e nao possui permissao para executar a proxima etapa.");
+    window.alert("Você concluiu sua tarefa e não possui permissão para executar a próxima etapa.");
     router.push("/tarefas");
     return true;
   }
@@ -1543,7 +1571,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
   function getStepStateLabel(step: Instance["steps"][number]) {
     if (step.status === 2) {
-      return step.completedAt ? `Concluida ${step.completedAt ? new Date(step.completedAt).toLocaleString("pt-BR") : ""}` : "Concluida";
+      return step.completedAt ? `Concluída ${step.completedAt ? new Date(step.completedAt).toLocaleString("pt-BR") : ""}` : "Concluída";
     }
 
     if (step.status === 1) {
@@ -1613,9 +1641,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
         {isAwaitingData && (
           <div className="notice" style={{ marginBottom: 16 }}>
-            <strong>{ruleMode === "condition" ? "Consulta aguardando condicao da API" : "Consulta aguardando retorno com conteudo"}</strong>
+            <strong>{ruleMode === "condition" ? "Consulta aguardando condição da API" : "Consulta aguardando retorno com conteúdo"}</strong>
             <div style={{ marginTop: 8 }}>
-              {awaitingDataMessage || "A API respondeu com lista vazia e o sistema continuara tentando automaticamente."}
+              {awaitingDataMessage || "A API respondeu com lista vazia e o sistema continuará tentando automaticamente."}
             </div>
             {(actualValue || expectedValue) && (
               <div className="section-copy" style={{ marginTop: 6 }}>
@@ -1631,7 +1659,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
             {(attemptCount || maxAttempts || nextAttemptAt) && (
               <div className="section-copy" style={{ marginTop: 6 }}>
                 {attemptCount && maxAttempts ? `Tentativa ${attemptCount} de ${maxAttempts}. ` : ""}
-                {nextAttemptAt ? `Proxima tentativa: ${nextAttemptAt}.` : ""}
+                {nextAttemptAt ? `Próxima tentativa: ${nextAttemptAt}.` : ""}
               </div>
             )}
           </div>
@@ -1639,9 +1667,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
         {isCancelledWaiting && (
           <div className="notice" style={{ marginBottom: 16 }}>
-            <strong>Consulta automatica interrompida manualmente</strong>
+            <strong>Consulta automática interrompida manualmente</strong>
             <div style={{ marginTop: 8 }}>
-              {awaitingDataMessage || "As novas tentativas foram canceladas e esta etapa nao fara novas consultas automaticamente."}
+              {awaitingDataMessage || "As novas tentativas foram canceladas e esta etapa não fará novas consultas automaticamente."}
             </div>
           </div>
         )}
@@ -1708,7 +1736,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
         {technicalData.length > 0 && (
           <div style={{ marginTop: 14 }}>
-            <strong>Dados tecnicos da automacao</strong>
+            <strong>Dados técnicos da automação</strong>
             <div className="data-list" style={{ marginTop: 10 }}>
               {technicalData.map(([key, value]) => (
                 <div className="data-item" key={`${step.id}-${key}`}>
@@ -1726,7 +1754,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
         {step.integrationAttempts.length > 0 && (
           <div style={{ marginTop: 14 }}>
-            <strong>Integracoes da etapa</strong>
+            <strong>Integrações da etapa</strong>
             <div className="data-list" style={{ marginTop: 10 }}>
               {step.integrationAttempts.map(attempt => (
                 <div className="data-item" key={attempt.id}>
@@ -1760,13 +1788,17 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
     const mappedEntries: Array<[string, unknown]> = [];
     for (const field of currentStep.fields) {
-      if (isStructuredListField(field)) {
-        continue;
-      }
-
       const candidates = buildReaderCandidates(field);
       const match = normalizedEntries.find(entry => [...entry.aliases].some(alias => candidates.has(alias)));
       if (!match) {
+        continue;
+      }
+
+      if (isStructuredListField(field)) {
+        const structuredRows = mapStructuredReaderRows(field, match.value);
+        if (structuredRows.length > 0) {
+          mappedEntries.push([field.key, structuredRows]);
+        }
         continue;
       }
 
@@ -1794,7 +1826,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       const matchedFields = applyReaderData(result.fields);
       const warnings = [...result.warnings];
       if (!matchedFields && Object.keys(result.fields).length > 0) {
-        warnings.push("Os dados foram lidos, mas nao combinaram com os campos configurados nesta etapa.");
+        warnings.push("Os dados foram lidos, mas não combinaram com os campos configurados nesta etapa.");
       }
 
       setReaderWarning(warnings.join(" "));
@@ -1806,7 +1838,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   async function scanCode() {
     setReaderWarning("");
     if (!navigator.mediaDevices) {
-      setReaderWarning("Camera indisponivel. Use o coletor como teclado nos campos da etapa.");
+      setReaderWarning("Câmera indisponível. Use o coletor como teclado nos campos da etapa.");
       return;
     }
 
@@ -1826,7 +1858,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       }).BarcodeDetector;
 
       if (!Detector) {
-        setReaderWarning("Este navegador nao oferece leitura nativa. Use o coletor fisico ou preencha manualmente.");
+        setReaderWarning("Este navegador não oferece leitura nativa. Use o coletor físico ou preencha manualmente.");
         return;
       }
 
@@ -1851,7 +1883,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
       setTimeout(() => void loop(), 700);
     } catch {
-      setReaderWarning("Nao foi possivel abrir a camera. Verifique a permissao e use HTTPS ou localhost.");
+      setReaderWarning("Não foi possível abrir a câmera. Verifique a permissão e use HTTPS ou localhost.");
     }
   }
 
@@ -1879,7 +1911,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       });
       setNotes(nextStep?.notes ?? "");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Nao foi possivel enviar o arquivo.");
+      setError(e instanceof Error ? e.message : "Não foi possível enviar o arquivo.");
     } finally {
       setUploadingFieldKey("");
     }
@@ -1903,7 +1935,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       });
       syncCurrentStepState(result, setItem, setFormData, setNotes);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Nao foi possivel salvar a etapa.");
+      setError(e instanceof Error ? e.message : "Não foi possível salvar a etapa.");
     } finally {
       setSaving(false);
     }
@@ -1919,7 +1951,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     if (issues.length > 0) {
       const uniqueFieldKeys = [...new Set(issues.map(issue => issue.fieldKey))];
       setInvalidFieldKeys(uniqueFieldKeys);
-      setError(`Preencha os campos obrigatorios antes de concluir: ${issues.map(issue => issue.message).join(", ")}.`);
+      setError(`Preencha os campos obrigatórios antes de concluir: ${issues.map(issue => issue.message).join(", ")}.`);
       focusFirstInvalidField(uniqueFieldKeys[0]);
       return;
     }
@@ -1941,7 +1973,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
         return;
       }
 
-      setError(e instanceof Error ? e.message : "Nao foi possivel concluir a etapa.");
+      setError(e instanceof Error ? e.message : "Não foi possível concluir a etapa.");
     } finally {
       setAdvancing(false);
     }
@@ -1957,7 +1989,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       });
       syncCurrentStepState(result, setItem, setFormData, setNotes);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Nao foi possivel reprocessar a etapa.");
+      setError(e instanceof Error ? e.message : "Não foi possível reprocessar a etapa.");
     } finally {
       setReprocessingStepId("");
     }
@@ -1973,14 +2005,14 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       });
       syncCurrentStepState(result, setItem, setFormData, setNotes);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Nao foi possivel cancelar as tentativas automaticas.");
+      setError(e instanceof Error ? e.message : "Não foi possível cancelar as tentativas automáticas.");
     } finally {
       setCancelingStepId("");
     }
   }
 
   if (!item) {
-    return <div className="empty">Carregando execucao...</div>;
+    return <div className="empty">Carregando execução...</div>;
   }
 
   return (
@@ -1993,13 +2025,13 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           <h1 className="title">{buildReaderCode(currentStep, formData) || item.code}</h1>
           <p className="subtitle">Criado em {new Date(item.createdAt).toLocaleString("pt-BR")}</p>
         </div>
-        <span className={`badge ${item.status === 0 ? "inprogress" : "completed"}`}>{item.status === 0 ? "Em andamento" : "Concluido"}</span>
+        <span className={`badge ${item.status === 0 ? "inprogress" : "completed"}`}>{item.status === 0 ? "Em andamento" : "Concluído"}</span>
       </div>
 
       <div className="detailstack">
         <section className="card">
           <div style={{ padding: "24px 24px 0" }}>
-            <h2 className="section-title">Execucao da etapa atual</h2>
+            <h2 className="section-title">Execução da etapa atual</h2>
             {currentStep && <h1 style={{ fontSize: 36, lineHeight: 1.05, margin: "8px 0 10px", letterSpacing: "-0.04em" }}>{currentStep.name}</h1>}
             <p className="section-copy">
               {currentStep ? `Preencha os campos e conclua a etapa "${currentStep.name}".` : "Nenhuma etapa manual ativa no momento."}
@@ -2022,7 +2054,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 <div className="field span2">
                   <div className="scanbox">
                     <strong>Entrada assistida</strong>
-                    <p className="section-copy">Leia um DANFE digital ou capture o codigo pela camera para preencher a etapa atual.</p>
+                    <p className="section-copy">Leia um DANFE digital ou capture o código pela câmera para preencher a etapa atual.</p>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                       <label className="btn btn-secondary">
                         <Paperclip size={16} />
@@ -2031,7 +2063,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                       </label>
                       <button className="btn btn-secondary" type="button" onClick={scanCode}>
                         <Camera size={16} />
-                        Abrir camera
+                        Abrir câmera
                       </button>
                     </div>
                     {scanning && <video ref={video} className="camera" muted playsInline />}
@@ -2074,13 +2106,13 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                     )}
                   </div>
                   {invalidFieldSet.has(field.key) && (
-                    <small style={{ color: "var(--danger)", fontWeight: 700 }}>Campo obrigatorio.</small>
+                    <small style={{ color: "var(--danger)", fontWeight: 700 }}>Campo obrigatório.</small>
                   )}
                 </div>
               ))}
 
               <div className="field span2">
-                <label>Observacoes da etapa</label>
+                <label>Observações da etapa</label>
                 <textarea className="textarea" value={notes} onChange={event => setNotes(event.target.value)} />
               </div>
             </div>
@@ -2089,7 +2121,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           {currentStep?.isAutomatic && (
             <div style={{ margin: 24, display: "grid", gap: 12 }}>
               <div className="notice">
-                Esta etapa e automatica. Use o historico abaixo para acompanhar a execucao sistemica ou consultar detalhes da integracao.
+                Esta etapa é automática. Use o histórico abaixo para acompanhar a execução sistêmica ou consultar detalhes da integração.
               </div>
               {automaticSchedule && (
                 <div className="data-list" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
@@ -2099,8 +2131,8 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                     <div className="section-copy" style={{ marginTop: 6 }}>{automaticSchedule.detail}</div>
                   </div>
                   <div className="data-item">
-                    <small>Proxima execucao prevista</small>
-                    <strong>{automaticSchedule.nextAt ? formatScheduleDate(automaticSchedule.nextAt) : "Nao foi possivel calcular"}</strong>
+                    <small>Próxima execução prevista</small>
+                    <strong>{automaticSchedule.nextAt ? formatScheduleDate(automaticSchedule.nextAt) : "Não foi possível calcular"}</strong>
                     <div className="section-copy" style={{ marginTop: 6 }}>
                       O worker verifica etapas agendadas em ciclos de aproximadamente 30 segundos.
                     </div>
@@ -2150,7 +2182,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
               <h2 className="section-title">Jornada do registro</h2>
               <p className="section-copy">Acompanhe o status, executor e os detalhes de cada etapa.</p>
             </div>
-            <div className="view-toggle" role="tablist" aria-label="Modo de visualizacao da jornada">
+            <div className="view-toggle" role="tablist" aria-label="Modo de visualização da jornada">
               <button
                 className={`view-toggle-btn ${journeyView === "timeline" ? "active" : ""}`}
                 type="button"
@@ -2158,7 +2190,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 aria-selected={journeyView === "timeline"}
                 onClick={() => setJourneyView("timeline")}
               >
-                Visao 1
+                Visão 1
               </button>
               <button
                 className={`view-toggle-btn ${journeyView === "diagram" ? "active" : ""}`}
@@ -2167,7 +2199,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 aria-selected={journeyView === "diagram"}
                 onClick={() => setJourneyView("diagram")}
               >
-                Visao 2
+                Visão 2
               </button>
             </div>
           </div>
@@ -2184,13 +2216,13 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                       {getStepStateLabel(step)}
                     </div>
                     <div className="section-copy" style={{ marginTop: 4 }}>
-                      {step.isAutomatic ? "Execucao automatica/sistemica" : `Executado por ${step.completedByName || "usuario nao identificado"}`}
+                      {step.isAutomatic ? "Execução automática/sistêmica" : `Executado por ${step.completedByName || "usuário não identificado"}`}
                     </div>
                   </div>
                   <small>Etapa {step.order}</small>
                   <button className="btn btn-ghost" type="button" onClick={() => toggleStepDetails(step.id)}>
                     {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    Mais informacoes
+                    Mais informações
                   </button>
                 </div>
 
@@ -2205,8 +2237,8 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 <div className="step-diagram-canvas" role="list" aria-label="Jornada do registro em diagrama">
                   {item.steps.map(step => {
                     const expanded = !!expandedSteps[step.id];
-                    const stateLabel = step.status === 2 ? "Concluida" : step.status === 1 ? "Atual" : step.status === 3 ? "Interrompida" : "Aguardando";
-                    const actorLabel = step.isAutomatic ? "Execucao automatica/sistemica" : `Executado por ${step.completedByName || "usuario nao identificado"}`;
+                    const stateLabel = step.status === 2 ? "Concluída" : step.status === 1 ? "Atual" : step.status === 3 ? "Interrompida" : "Aguardando";
+                    const actorLabel = step.isAutomatic ? "Execução automática/sistêmica" : `Executado por ${step.completedByName || "usuário não identificado"}`;
 
                     return (
                       <div key={step.id} className={`diagram-node ${step.status === 1 ? "active" : step.status === 3 ? "failed" : ""}`} role="listitem">
@@ -2219,14 +2251,14 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                           <small>{actorLabel}</small>
                           <div className="step-meta">
                             <span>Etapa {step.order}</span>
-                            {step.integrationAttempts.length > 0 && <span>Integracao</span>}
+                            {step.integrationAttempts.length > 0 && <span>Integração</span>}
                           </div>
                         </button>
 
                         <div className="diagram-node-actions">
                           <button className="btn btn-ghost btn-inline" type="button" onClick={() => toggleJourneyDiagramDetails(step.id)}>
                             {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                            Mais informacoes
+                            Mais informações
                           </button>
                         </div>
                       </div>
@@ -2243,12 +2275,12 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                       <h3>{selectedJourneyStep.name}</h3>
                       <p className="section-copy">
                         {selectedJourneyStep.status === 2
-                          ? `Concluida ${selectedJourneyStep.completedAt ? new Date(selectedJourneyStep.completedAt).toLocaleString("pt-BR") : ""}`
+                          ? `Concluída ${selectedJourneyStep.completedAt ? new Date(selectedJourneyStep.completedAt).toLocaleString("pt-BR") : ""}`
                           : selectedJourneyStep.status === 1
-                            ? "Etapa atual em execucao."
+                            ? "Etapa atual em execução."
                             : selectedJourneyStep.status === 3
                               ? "Etapa interrompida manualmente."
-                              : "Etapa aguardando liberacao."}
+                              : "Etapa aguardando liberação."}
                       </p>
                     </div>
                     <button className="btn btn-ghost" type="button" onClick={() => toggleJourneyDiagramDetails(selectedJourneyStep.id)}>
