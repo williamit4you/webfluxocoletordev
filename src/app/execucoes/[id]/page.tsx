@@ -7,6 +7,23 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 
+declare global {
+  interface Window {
+    pdfjsLib?: {
+      GlobalWorkerOptions: { workerSrc: string };
+      getDocument: (source: { data: Uint8Array }) => {
+        promise: Promise<{
+          numPages: number;
+          getPage: (pageNumber: number) => Promise<{
+            getTextContent: () => Promise<{ items: Array<{ str?: string; transform?: number[] }> }>;
+          }>;
+        }>;
+      };
+    };
+    __pdfJsLoader?: Promise<NonNullable<Window["pdfjsLib"]>>;
+  }
+}
+
 type UploadAsset = {
   id: string;
   fieldKey: string;
@@ -17,6 +34,14 @@ type UploadAsset = {
   isPhoto: boolean;
   uploadedAt: string;
 };
+
+type ReaderParseResult = {
+  fields: Record<string, unknown>;
+  warnings: string[];
+};
+
+const PDF_JS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+const PDF_JS_WORKER_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
 function isUploadField(type: number) {
   return type === 3 || type === 7;
@@ -128,6 +153,345 @@ function buildReaderCandidates(field: ExecutionField) {
   }
 
   return candidates;
+}
+
+function normalizeReaderText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function extractDigits(value: string) {
+  return value.replace(/\D+/g, "");
+}
+
+function findRegexValue(text: string, patterns: RegExp[]) {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]?.trim()) {
+      return match[1].trim();
+    }
+  }
+
+  return "";
+}
+
+function findLineValue(lines: string[], labelPatterns: RegExp[], fallbackPatterns: RegExp[] = []) {
+  for (const pattern of fallbackPatterns) {
+    const direct = findRegexValue(lines.join("\n"), [pattern]);
+    if (direct) {
+      return direct;
+    }
+  }
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!labelPatterns.some(pattern => pattern.test(line))) {
+      continue;
+    }
+
+    const sameLine = line
+      .replace(/^[^:]*:\s*/u, "")
+      .replace(/^(?:nome|razao|social|endereco|bairro|cep|municipio|uf|fone|fax|telefone|inscricao estadual)\s*/iu, "")
+      .trim();
+
+    if (sameLine && sameLine !== line.trim()) {
+      return sameLine;
+    }
+
+    for (let offset = 1; offset <= 2; offset += 1) {
+      const candidate = lines[index + offset]?.trim();
+      if (!candidate) {
+        continue;
+      }
+
+      if (candidate.endsWith(":")) {
+        continue;
+      }
+
+      return candidate;
+    }
+  }
+
+  return "";
+}
+
+function parseDanfeItems(lines: string[]) {
+  const items: Array<Record<string, unknown>> = [];
+  const startIndex = lines.findIndex(line => /codigo\s+produto|cod(?:igo)?\s+prod/i.test(line) && /descricao/i.test(line));
+  if (startIndex < 0) {
+    return items;
+  }
+
+  for (let index = startIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (!line) {
+      continue;
+    }
+
+    if (/dados adicionais|calculo do imposto|transportador|cobranca/i.test(line)) {
+      break;
+    }
+
+    const match = line.match(/^(\S+)\s+(.+?)\s+(\d{4}\.?\d{2}\.?\d{2}|\d{8})\s+([0-9]{2,3})\s+([0-9]{4})\s+([0-9.,]+)\s+([0-9.,]+)\s+([0-9.,]+)$/);
+    if (!match) {
+      continue;
+    }
+
+    items.push({
+      codigo_produto: match[1].trim(),
+      descricao: match[2].trim(),
+      ncm: match[3].trim(),
+      cst: match[4].trim(),
+      cfop: match[5].trim(),
+      qtde: match[6].trim(),
+      valor_unitario: match[7].trim(),
+      valor_total_item: match[8].trim()
+    });
+  }
+
+  return items;
+}
+
+function parseDanfeText(text: string) {
+  const compactText = text.replace(/\s+/g, " ").trim();
+  const lines = text
+    .split(/\r?\n/)
+    .map(line => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  const fields: Record<string, unknown> = {};
+
+  const cnpj = findRegexValue(compactText, [
+    /CNPJ\/CPF[:\s]*([\d./-]{14,18})/i,
+    /CNPJ[:\s]*([\d./-]{14,18})/i
+  ]);
+  if (cnpj) {
+    fields.cnpj = cnpj;
+    fields.cnpjEmitente = cnpj;
+  }
+
+  const inscricaoEstadual = findRegexValue(compactText, [
+    /INSCRI(?:C|Ç)AO ESTADUAL[:\s]*([A-Z0-9./-]+)/i
+  ]);
+  if (inscricaoEstadual) {
+    fields.inscricao_estadual = inscricaoEstadual;
+    fields.inscricaoEstadual = inscricaoEstadual;
+  }
+
+  const razaoSocial = findLineValue(lines, [/nome.*razao social/i, /^emitente$/i], [
+    /NOME\/RAZAO SOCIAL[:\s]*(.+?)(?=\s+CNPJ|\s+ENDERECO|\s+DATA)/i
+  ]);
+  if (razaoSocial) {
+    fields.razao_social = razaoSocial;
+    fields.emitente = razaoSocial;
+  }
+
+  const dataEmissao = findRegexValue(compactText, [
+    /DATA (?:DE )?EMISSAO[:\s]*([0-9]{2}\/[0-9]{2}\/[0-9]{4})/i
+  ]);
+  if (dataEmissao) {
+    fields.data_emissao = dataEmissao;
+    fields.dataEmissao = dataEmissao;
+  }
+
+  const endereco = findLineValue(lines, [/^endereco$/i, /^logradouro$/i], [
+    /ENDERECO[:\s]*(.+?)(?=\s+BAIRRO|\s+CEP|\s+MUNICIPIO)/i
+  ]);
+  if (endereco) {
+    fields.endereco = endereco;
+  }
+
+  const bairro = findLineValue(lines, [/^bairro/i, /distrito/i], [
+    /BAIRRO(?:\s*\/\s*DISTRITO)?[:\s]*(.+?)(?=\s+CEP|\s+MUNICIPIO|\s+UF)/i
+  ]);
+  if (bairro) {
+    fields.bairro = bairro;
+  }
+
+  const cep = findRegexValue(compactText, [
+    /CEP[:\s]*([0-9]{5}-?[0-9]{3})/i
+  ]);
+  if (cep) {
+    fields.cep = cep;
+  }
+
+  const municipio = findLineValue(lines, [/^municipio$/i, /^cidade$/i], [
+    /MUNICIPIO[:\s]*(.+?)(?=\s+FONE|\s+UF|\s+INSCRI)/i
+  ]);
+  if (municipio) {
+    fields.municipio = municipio;
+  }
+
+  const telefone = findRegexValue(compactText, [
+    /(?:FONE|FONE\/FAX|TELEFONE)[:\s]*([\d()\s-]{8,})/i
+  ]);
+  if (telefone) {
+    fields.telefone = telefone;
+  }
+
+  const estado = findRegexValue(compactText, [
+    /\bUF[:\s]*([A-Z]{2})\b/i
+  ]);
+  if (estado) {
+    fields.estado = estado;
+  }
+
+  const valorProdutos = findRegexValue(compactText, [
+    /VALOR TOTAL DOS PRODUTOS[:\s]*([0-9.]+,[0-9]{2})/i
+  ]);
+  if (valorProdutos) {
+    fields.valor_total_dos_produtos = valorProdutos;
+  }
+
+  const valorNota = findRegexValue(compactText, [
+    /VALOR TOTAL DA NOTA[:\s]*([0-9.]+,[0-9]{2})/i,
+    /VALOR TOTAL[:\s]*([0-9.]+,[0-9]{2})/i
+  ]);
+  if (valorNota) {
+    fields.valor_total_da_nota = valorNota;
+    fields.valorTotal = valorNota;
+  }
+
+  const chaveAcesso = extractDigits(findRegexValue(compactText, [
+    /CHAVE DE ACESSO[:\s]*((?:\d[\s.-]*){44})/i
+  ]));
+  if (chaveAcesso.length === 44) {
+    fields.chaveAcesso = chaveAcesso;
+  }
+
+  const numeroNfe = findRegexValue(compactText, [
+    /N[ÚU]MERO[:\s]*([0-9]{1,9})/i,
+    /NF-E\s+N[Oº°]?\s*([0-9]{1,9})/i
+  ]);
+  if (numeroNfe) {
+    fields.numeroNfe = numeroNfe;
+  }
+
+  const serie = findRegexValue(compactText, [
+    /S[ÉE]RIE[:\s]*([0-9]{1,3})/i
+  ]);
+  if (serie) {
+    fields.serie = serie;
+  }
+
+  const items = parseDanfeItems(lines);
+  if (items.length > 0) {
+    fields.itens = items;
+    fields.items = items;
+  }
+
+  const warnings: string[] = [];
+  if (Object.keys(fields).length === 0) {
+    warnings.push("Nao foi possivel identificar dados da nota no navegador. Confirme se o PDF possui texto selecionavel.");
+  }
+
+  return { fields, warnings };
+}
+
+async function loadPdfJs() {
+  if (window.pdfjsLib) {
+    return window.pdfjsLib;
+  }
+
+  if (!window.__pdfJsLoader) {
+    window.__pdfJsLoader = new Promise((resolve, reject) => {
+      const existingScript = document.querySelector<HTMLScriptElement>('script[data-pdfjs="reader"]');
+      if (existingScript) {
+        existingScript.addEventListener("load", () => {
+          if (!window.pdfjsLib) {
+            reject(new Error("Biblioteca de leitura de PDF nao ficou disponivel."));
+            return;
+          }
+
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_JS_WORKER_URL;
+          resolve(window.pdfjsLib);
+        }, { once: true });
+        existingScript.addEventListener("error", () => reject(new Error("Falha ao carregar a biblioteca de PDF.")), { once: true });
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = PDF_JS_URL;
+      script.async = true;
+      script.dataset.pdfjs = "reader";
+      script.onload = () => {
+        if (!window.pdfjsLib) {
+          reject(new Error("Biblioteca de leitura de PDF nao ficou disponivel."));
+          return;
+        }
+
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_JS_WORKER_URL;
+        resolve(window.pdfjsLib);
+      };
+      script.onerror = () => reject(new Error("Falha ao carregar a biblioteca de PDF."));
+      document.head.appendChild(script);
+    });
+  }
+
+  return window.__pdfJsLoader;
+}
+
+function buildPdfLines(items: Array<{ str?: string; transform?: number[] }>) {
+  const positioned = items
+    .map(item => ({
+      text: item.str?.trim() ?? "",
+      x: item.transform?.[4] ?? 0,
+      y: item.transform?.[5] ?? 0
+    }))
+    .filter(item => item.text);
+
+  positioned.sort((left, right) => {
+    if (Math.abs(right.y - left.y) > 2) {
+      return right.y - left.y;
+    }
+
+    return left.x - right.x;
+  });
+
+  const groups: Array<{ y: number; entries: Array<{ text: string; x: number }> }> = [];
+  for (const item of positioned) {
+    const currentGroup = groups[groups.length - 1];
+    if (!currentGroup || Math.abs(currentGroup.y - item.y) > 2.5) {
+      groups.push({ y: item.y, entries: [{ text: item.text, x: item.x }] });
+      continue;
+    }
+
+    currentGroup.entries.push({ text: item.text, x: item.x });
+  }
+
+  return groups.map(group =>
+    group.entries
+      .sort((left, right) => left.x - right.x)
+      .map(entry => entry.text)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim()
+  ).filter(Boolean);
+}
+
+async function extractPdfTextInBrowser(file: File) {
+  const pdfjsLib = await loadPdfJs();
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  const pageTexts: string[] = [];
+
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    const lines = buildPdfLines(content.items);
+    pageTexts.push(lines.join("\n"));
+  }
+
+  return pageTexts.join("\n\n");
+}
+
+async function readDanfeInBrowser(file: File): Promise<ReaderParseResult> {
+  const text = await extractPdfTextInBrowser(file);
+  return parseDanfeText(text);
 }
 
 function formatPreviewContent(value: unknown) {
@@ -1162,11 +1526,8 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
     setReaderWarning("");
 
-    const body = new FormData();
-    body.append("file", file);
-
     try {
-      const result = await api<{ fields: Record<string, string>; warnings: string[] }>("/documents/nfe/extract", { method: "POST", body });
+      const result = await readDanfeInBrowser(file);
       const matchedFields = applyReaderData(result.fields);
       const warnings = [...result.warnings];
       if (!matchedFields && Object.keys(result.fields).length > 0) {
@@ -1175,7 +1536,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
       setReaderWarning(warnings.join(" "));
     } catch (e) {
-      setReaderWarning(e instanceof Error ? e.message : "Falha na leitura.");
+      setReaderWarning(e instanceof Error ? e.message : "Falha na leitura do PDF no navegador.");
     }
   }
 
