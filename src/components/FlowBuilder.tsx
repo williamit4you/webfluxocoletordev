@@ -883,7 +883,7 @@ function ResponseRuleEditor({
           </div>
           <div className="field">
             <label>Limite de tentativas</label>
-            <input className="input" type="number" min={1} max={1000} value={rule.maxAttempts ?? 20} onChange={e => patchRule({ maxAttempts: Math.max(1, Number(e.target.value) || 1) })} disabled={!isDraft || !rule.enabled} />
+            <input className="input" type="number" min={1} max={100000} value={rule.maxAttempts ?? 20} onChange={e => patchRule({ maxAttempts: Math.max(1, Number(e.target.value) || 1) })} disabled={!isDraft || !rule.enabled} />
           </div>
         </>
       )}
