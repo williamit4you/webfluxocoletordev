@@ -1218,9 +1218,7 @@ function buildAssetUrl(url: string) {
     return url;
   }
 
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
-  const origin = apiBase.replace(/\/api\/?$/, "");
-  return `${origin}${url}`;
+  return `/api/proxy${url.startsWith("/") ? url : `/${url}`}`;
 }
 
 function formatBytes(size: number) {
