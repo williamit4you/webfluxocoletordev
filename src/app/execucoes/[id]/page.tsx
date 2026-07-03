@@ -3,7 +3,7 @@
 import { api } from "@/lib/api";
 import { readDanfeInBrowser as readDanfeFileInBrowser } from "@/lib/danfeReader";
 import type { ExecutionField, FieldOption, Flow, Instance, StepApiConfig } from "@/lib/types";
-import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Paperclip, Play, RotateCw, Save, ShieldAlert, Square } from "lucide-react";
+import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, LoaderCircle, Paperclip, Play, RotateCw, Save, ShieldAlert, Square } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
@@ -2093,6 +2093,16 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
   return (
     <>
+      {advancing && (
+        <div className="page-loading-overlay" aria-live="polite" aria-busy="true">
+          <div className="page-loading-card card">
+            <LoaderCircle size={22} className="spin" />
+            <strong>Concluindo etapa...</strong>
+            <span>Aguarde enquanto registramos a execução desta tarefa.</span>
+          </div>
+        </div>
+      )}
+
       {gateToast}
       <Link href="/" className="btn btn-ghost"><ArrowLeft size={16} />Voltar</Link>
 
@@ -2240,12 +2250,12 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           <div className="actions" style={{ padding: "0 24px 24px" }}>
             {currentStep && !currentStep.isAutomatic && (
               <>
-                <button className="btn btn-secondary" type="button" onClick={saveStep} disabled={saving || !!uploadingFieldKey}>
+                <button className="btn btn-secondary" type="button" onClick={saveStep} disabled={saving || advancing || !!uploadingFieldKey}>
                   <Save size={16} />
                   {saving ? "Salvando..." : "Salvar dados"}
                 </button>
-                <button className="btn btn-primary" type="button" onClick={advance} disabled={advancing || !!uploadingFieldKey}>
-                  <Check size={16} />
+                <button className="btn btn-primary" type="button" onClick={advance} disabled={advancing || saving || !!uploadingFieldKey}>
+                  {advancing ? <LoaderCircle size={16} className="spin" /> : <Check size={16} />}
                   {advancing ? "Concluindo..." : "Concluir etapa"}
                 </button>
               </>
