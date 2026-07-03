@@ -1522,9 +1522,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     setGateState(
       reason === "advance"
         ? {
-          title: "Etapa concluida com sucesso",
-          message: "Sua tarefa foi finalizada e voce nao possui permissao para acessar a proxima etapa desta execucao.",
-          accent: "success"
+          title: "Acesso restrito",
+          message: "Etapa concluida. Voce nao possui permissao para acessar a proxima etapa desta execucao.",
+          accent: "danger"
         }
         : {
           title: "Acesso negado",
@@ -1558,6 +1558,18 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   useEffect(() => {
     void load("view");
   }, [id]);
+
+  useEffect(() => {
+    if (!gateState) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      router.push("/tarefas");
+    }, 2600);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [gateState, router]);
 
   const currentStep = useMemo(
     () => item?.steps.find(step => step.id === item.currentStepExecutionId) ?? item?.steps.find(step => step.status === 1),
@@ -2047,18 +2059,10 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           <div className={`toast-icon ${gateState.accent === "success" ? "toast-icon-success" : "toast-icon-danger"}`}>
             {gateState.accent === "success" ? <Check size={18} /> : <ShieldAlert size={18} />}
           </div>
-          <button className="toast-close" type="button" aria-label="Fechar aviso" onClick={() => setGateState(null)}>
-            ×
-          </button>
         </div>
         <span className="toast-eyebrow">{gateState.accent === "success" ? "Execucao concluida" : "Permissao necessaria"}</span>
         <strong className="toast-title">{gateState.title}</strong>
         <p className="toast-copy">{gateState.message}</p>
-        <div className="toast-actions">
-          <button className="btn btn-primary" type="button" onClick={() => router.push("/tarefas")}>
-            Voltar para tarefas
-          </button>
-        </div>
       </div>
     </div>
   ) : null;
