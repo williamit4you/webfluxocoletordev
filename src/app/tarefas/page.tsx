@@ -3,9 +3,8 @@
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/Auth";
 import type { Instance } from "@/lib/types";
-import { Eye, PlayCircle, Search } from "lucide-react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { LoaderCircle, PlayCircle, Search } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type PendingTasksResponse = {
@@ -15,8 +14,11 @@ type PendingTasksResponse = {
   pageSize: number;
 };
 
+type TaskFilter = "pending" | "executed" | "all";
+
 export default function TasksPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { user } = useAuth();
   const [rows, setRows] = useState<Instance[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,13 +26,15 @@ export default function TasksPage() {
   const [page, setPage] = useState(Number(searchParams.get("page") ?? "1"));
   const [pageSize, setPageSize] = useState(Number(searchParams.get("pageSize") ?? "10"));
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [statusFilter, setStatusFilter] = useState<TaskFilter>((searchParams.get("statusFilter") as TaskFilter) || "pending");
   const [totalCount, setTotalCount] = useState(0);
+  const [launchingTaskId, setLaunchingTaskId] = useState("");
   const focusInstanceId = searchParams.get("focusInstance") ?? "";
   const focusedRowRef = useRef<HTMLTableRowElement | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    api<PendingTasksResponse>(`/instances/pending-tasks?page=${page}&pageSize=${pageSize}&search=${encodeURIComponent(search)}`)
+    api<PendingTasksResponse>(`/instances/pending-tasks?page=${page}&pageSize=${pageSize}&search=${encodeURIComponent(search)}&statusFilter=${statusFilter}`)
       .then(result => {
         setRows(result.items);
         setTotalCount(result.totalCount);
@@ -40,7 +44,7 @@ export default function TasksPage() {
         setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar as tarefas.");
       })
       .finally(() => setLoading(false));
-  }, [page, pageSize, search]);
+  }, [page, pageSize, search, statusFilter]);
 
   const tasks = useMemo(() => rows.map(item => {
     const currentStep = item.steps.find(step => step.id === item.currentStepExecutionId) ?? item.steps.find(step => step.status === 1);
@@ -65,27 +69,39 @@ export default function TasksPage() {
 
   function buildExecutionHref(instanceId: string) {
     const params = new URLSearchParams();
-    const row = rows.find(item => item.id === instanceId);
-    if (row?.flowDefinitionId) {
-      params.set("flowId", row.flowDefinitionId);
-    }
     if (search) {
       params.set("search", search);
     }
     params.set("page", String(page));
     params.set("pageSize", String(pageSize));
+    params.set("statusFilter", statusFilter);
     params.set("focusInstance", instanceId);
-    return `/execucoes/${instanceId}?returnTo=${encodeURIComponent(`/?${params.toString()}`)}`;
+    return `/execucoes/${instanceId}?returnTo=${encodeURIComponent(`/tarefas?${params.toString()}`)}`;
+  }
+
+  function openTask(instanceId: string) {
+    setLaunchingTaskId(instanceId);
+    router.push(buildExecutionHref(instanceId));
   }
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   return <>
+    {launchingTaskId && (
+      <div className="page-loading-overlay" aria-live="polite" aria-busy="true">
+        <div className="page-loading-card card">
+          <LoaderCircle size={22} className="spin" />
+          <strong>Abrindo tarefa...</strong>
+          <span>Estamos preparando a execução selecionada.</span>
+        </div>
+      </div>
+    )}
+
     <div className="pagehead">
       <div>
-        <span className="eyebrow">Operacao</span>
+        <span className="eyebrow">Operação</span>
         <h1 className="title">Tarefas</h1>
-        <p className="subtitle">Exibindo apenas as próximas tarefas que você pode executar, com carregamento paginado para manter a tela rápida.</p>
+        <p className="subtitle">Acompanhe as tarefas relacionadas a você, com filtros de pendência e paginação para manter a tela rápida.</p>
       </div>
     </div>
 
@@ -94,7 +110,7 @@ export default function TasksPage() {
         <article className="card metric">
           <div className="label">Total disponível</div>
           <div className="value">{totalCount}</div>
-          <div className="hint">tarefas executáveis</div>
+          <div className="hint">tarefas relacionadas</div>
         </article>
         <article className="card metric">
           <div className="label">Nesta página</div>
@@ -139,6 +155,18 @@ export default function TasksPage() {
             </label>
 
             <label className="field" style={{ minWidth: 220 }}>
+              <span>Filtro</span>
+              <select className="select" value={statusFilter} onChange={e => {
+                setPage(1);
+                setStatusFilter(e.target.value as TaskFilter);
+              }}>
+                <option value="pending">Pendentes</option>
+                <option value="executed">Executadas</option>
+                <option value="all">Todas</option>
+              </select>
+            </label>
+
+            <label className="field" style={{ minWidth: 220 }}>
               <span>Exibir</span>
               <select className="select" value={pageSize} onChange={e => {
                 setPage(1);
@@ -162,7 +190,7 @@ export default function TasksPage() {
                   <th>Status</th>
                   <th>Etapa atual</th>
                   <th>Atualizado</th>
-                  <th>Acao</th>
+                  <th>Ação</th>
                 </tr>
               </thead>
               <tbody>
@@ -175,20 +203,26 @@ export default function TasksPage() {
                     className={focusInstanceId === item.id ? "row-focus" : ""}
                   >
                     <td>
-                      <Link className="code" href={buildExecutionHref(item.id)}>{item.code}</Link>
-                      {completedByUser && <div className="section-copy" style={{ marginTop: 4 }}>Voce ja atuou neste registro</div>}
+                      <span className="code">{item.code}</span>
+                      {completedByUser && <div className="section-copy" style={{ marginTop: 4 }}>Você já atuou neste registro</div>}
                     </td>
                     <td>{item.flowName}</td>
                     <td>
-                      <span className="badge inprogress">Pendente</span>
+                      <span className={`badge ${canExecute ? "inprogress" : completedByUser ? "completed" : "cancelled"}`}>
+                        {canExecute ? "Pendente" : completedByUser ? "Executada" : "Relacionada"}
+                      </span>
                     </td>
                     <td>{currentStep?.name ?? "Sem etapa manual"}</td>
                     <td>{new Date(item.updatedAt).toLocaleString("pt-BR")}</td>
                     <td>
-                      <Link className="btn btn-primary" href={buildExecutionHref(item.id)}>
-                        {canExecute ? <PlayCircle size={16} /> : <Eye size={16} />}
-                        {canExecute ? "Executar" : "Ver"}
-                      </Link>
+                      {canExecute ? (
+                        <button className="btn btn-primary" type="button" onClick={() => openTask(item.id)} disabled={loading || launchingTaskId === item.id}>
+                          {launchingTaskId === item.id ? <LoaderCircle size={16} className="spin" /> : <PlayCircle size={16} />}
+                          {launchingTaskId === item.id ? "Abrindo..." : "Executar"}
+                        </button>
+                      ) : (
+                        <span className="section-copy" style={{ margin: 0 }}>Sem ação disponível</span>
+                      )}
                     </td>
                   </tr>
                 ))}

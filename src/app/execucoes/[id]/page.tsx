@@ -1486,7 +1486,6 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const { id } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnTo = searchParams.get("returnTo") || "/tarefas";
   const [item, setItem] = useState<Instance | null>(null);
   const [flowDefinition, setFlowDefinition] = useState<Flow | null>(null);
   const [error, setError] = useState("");
@@ -1558,6 +1557,14 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   useEffect(() => {
     void load("view");
   }, [id]);
+
+  const returnTo = useMemo(() => {
+    const explicitReturnTo = searchParams.get("returnTo");
+    if (explicitReturnTo) {
+      return explicitReturnTo;
+    }
+    return "/tarefas";
+  }, [searchParams]);
 
   useEffect(() => {
     if (!gateState) {
