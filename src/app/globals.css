@@ -43,5 +43,7 @@
 .toast-eyebrow{display:block;font-size:10px;color:var(--danger);font-weight:800;text-transform:uppercase;letter-spacing:.12em;margin-top:2px}
 .toast-title{display:block;font-size:16px;line-height:1.2;margin-top:6px}
 .toast-copy{color:var(--muted);margin:6px 0 0;font-size:13px;line-height:1.4}
+.table tr.row-focus td{background:#eef8f3}
+.table tr.row-focus td:first-child{box-shadow:inset 4px 0 0 var(--brand)}
 @keyframes toast-in-out{0%{opacity:0;transform:translate3d(24px,-10px,0) scale(.98)}12%,78%{opacity:1;transform:translate3d(0,0,0) scale(1)}100%{opacity:0;transform:translate3d(24px,-8px,0) scale(.98)}}
 @media(max-width:900px){.toast-stack{top:76px;right:16px;left:16px}.toast-card{width:100%}}

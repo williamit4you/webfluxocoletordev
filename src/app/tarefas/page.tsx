@@ -5,7 +5,8 @@ import { useAuth } from "@/components/Auth";
 import type { Instance } from "@/lib/types";
 import { Eye, PlayCircle, Search } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type TaskFilter = "all" | "pending" | "completed" | "cancelled";
 
@@ -22,13 +23,16 @@ function getInstanceStatusMeta(item: Instance) {
 }
 
 export default function TasksPage() {
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const [rows, setRows] = useState<Instance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [usingFallback, setUsingFallback] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<TaskFilter>("all");
-  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<TaskFilter>((searchParams.get("statusFilter") as TaskFilter) || "all");
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const focusInstanceId = searchParams.get("focusInstance") ?? "";
+  const focusedRowRef = useRef<HTMLTableRowElement | null>(null);
 
   useEffect(() => {
     api<Instance[]>("/instances")
@@ -98,6 +102,27 @@ export default function TasksPage() {
       ].some(value => value.toLowerCase().includes(normalizedSearch));
     });
   }, [search, statusFilter, tasks]);
+
+  useEffect(() => {
+    if (!focusInstanceId || !focusedRowRef.current) {
+      return;
+    }
+
+    focusedRowRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusInstanceId, filteredTasks.length]);
+
+  function buildExecutionHref(instanceId: string) {
+    const params = new URLSearchParams();
+    if (statusFilter !== "all") {
+      params.set("statusFilter", statusFilter);
+    }
+    if (search) {
+      params.set("search", search);
+    }
+    params.set("focusInstance", instanceId);
+
+    return `/execucoes/${instanceId}?returnTo=${encodeURIComponent(`/tarefas?${params.toString()}`)}`;
+  }
 
   return <>
     <div className="pagehead">
@@ -189,9 +214,15 @@ export default function TasksPage() {
               </thead>
               <tbody>
                 {filteredTasks.map(({ item, currentStep, status, completedByUser, canExecute }) => (
-                  <tr key={item.id}>
+                  <tr
+                    key={item.id}
+                    ref={focusInstanceId === item.id ? element => {
+                      focusedRowRef.current = element;
+                    } : null}
+                    className={focusInstanceId === item.id ? "row-focus" : ""}
+                  >
                     <td>
-                      <Link className="code" href={`/execucoes/${item.id}`}>{item.code}</Link>
+                      <Link className="code" href={buildExecutionHref(item.id)}>{item.code}</Link>
                       {completedByUser && <div className="section-copy" style={{ marginTop: 4 }}>Voce ja atuou neste registro</div>}
                     </td>
                     <td>{item.flowName}</td>
@@ -201,7 +232,7 @@ export default function TasksPage() {
                     <td>{currentStep?.name ?? (status.key === "completed" ? "Fluxo concluido" : "Sem etapa manual")}</td>
                     <td>{new Date(item.updatedAt).toLocaleString("pt-BR")}</td>
                     <td>
-                      <Link className="btn btn-primary" href={`/execucoes/${item.id}`}>
+                      <Link className="btn btn-primary" href={buildExecutionHref(item.id)}>
                         {canExecute ? <PlayCircle size={16} /> : <Eye size={16} />}
                         {canExecute ? "Executar" : "Ver"}
                       </Link>

@@ -5,7 +5,7 @@ import { readDanfeInBrowser as readDanfeFileInBrowser } from "@/lib/danfeReader"
 import type { ExecutionField, FieldOption, Flow, Instance, StepApiConfig } from "@/lib/types";
 import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Paperclip, Play, RotateCw, Save, ShieldAlert, Square } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
 
 declare global {
@@ -1485,6 +1485,8 @@ function renderFieldInput(
 export default function Detail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo") || "/tarefas";
   const [item, setItem] = useState<Instance | null>(null);
   const [flowDefinition, setFlowDefinition] = useState<Flow | null>(null);
   const [error, setError] = useState("");
@@ -1564,7 +1566,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
     const timeoutId = window.setTimeout(() => {
       if (gateState.accent === "success") {
-        router.push("/tarefas");
+        router.push(returnTo);
         return;
       }
 
@@ -1572,7 +1574,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     }, 2600);
 
     return () => window.clearTimeout(timeoutId);
-  }, [gateState, router]);
+  }, [gateState, returnTo, router]);
 
   const currentStep = useMemo(
     () => item?.steps.find(step => step.id === item.currentStepExecutionId) ?? item?.steps.find(step => step.status === 1),

@@ -5,28 +5,36 @@ import { api } from "@/lib/api";
 import type { Flow, Instance } from "@/lib/types";
 import { Plus, Search } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const statusName = ["Em andamento", "Concluído", "Cancelado"];
 
 export default function DashboardPage() {
+  const searchParams = useSearchParams();
   const [rows, setRows] = useState<Instance[]>([]);
   const [flows, setFlows] = useState<Flow[]>([]);
   const [flowId, setFlowId] = useState("");
-  const [search, setSearch] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [startDate, setStartDate] = useState(searchParams.get("startDate") ?? "");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("statusFilter") ?? "all");
   const [loading, setLoading] = useState(true);
+  const focusInstanceId = searchParams.get("focusInstance") ?? "";
+  const focusedRowRef = useRef<HTMLTableRowElement | null>(null);
 
   useEffect(() => {
     Promise.all([api<Flow[]>("/flows"), api<Instance[]>("/instances")])
       .then(([loadedFlows, loadedRows]) => {
         setFlows(loadedFlows);
-        setFlowId(loadedFlows[0]?.id ?? "");
+        const requestedFlowId = searchParams.get("flowId");
+        const resolvedFlowId = requestedFlowId && loadedFlows.some(flow => flow.id === requestedFlowId)
+          ? requestedFlowId
+          : loadedFlows[0]?.id ?? "";
+        setFlowId(resolvedFlowId);
         setRows(loadedRows);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [searchParams]);
 
   const selectedFlow = flows.find(flow => flow.id === flowId);
   const filtered = useMemo(() => {
@@ -38,6 +46,33 @@ export default function DashboardPage() {
       (!startDateValue || new Date(row.createdAt) >= startDateValue) &&
       (statusFilter === "all" || String(row.status) === statusFilter));
   }, [flowId, rows, search, startDate, statusFilter]);
+
+  useEffect(() => {
+    if (!focusInstanceId || !focusedRowRef.current) {
+      return;
+    }
+
+    focusedRowRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusInstanceId, filtered.length]);
+
+  function buildExecutionHref(instanceId: string) {
+    const params = new URLSearchParams();
+    if (flowId) {
+      params.set("flowId", flowId);
+    }
+    if (search) {
+      params.set("search", search);
+    }
+    if (startDate) {
+      params.set("startDate", startDate);
+    }
+    if (statusFilter && statusFilter !== "all") {
+      params.set("statusFilter", statusFilter);
+    }
+    params.set("focusInstance", instanceId);
+
+    return `/execucoes/${instanceId}?returnTo=${encodeURIComponent(`/?${params.toString()}`)}`;
+  }
 
   return <>
     <div className="pagehead">
@@ -117,8 +152,14 @@ export default function DashboardPage() {
           </thead>
           <tbody>
             {filtered.map(row =>
-              <tr key={row.id}>
-                <td><Link className="code" href={`/execucoes/${row.id}`}>{row.code}</Link></td>
+              <tr
+                key={row.id}
+                ref={focusInstanceId === row.id ? element => {
+                  focusedRowRef.current = element;
+                } : null}
+                className={focusInstanceId === row.id ? "row-focus" : ""}
+              >
+                <td><Link className="code" href={buildExecutionHref(row.id)}>{row.code}</Link></td>
                 <td><span className={`badge ${row.status === 0 ? "inprogress" : row.status === 1 ? "completed" : "cancelled"}`}>{statusName[row.status]}</span></td>
                 <td><Trail steps={row.steps} /></td>
                 <td>{new Date(row.updatedAt).toLocaleDateString("pt-BR")}</td>
