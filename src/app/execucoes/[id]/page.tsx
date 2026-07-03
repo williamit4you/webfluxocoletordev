@@ -2040,28 +2040,35 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     }
   }
 
+  const gateToast = gateState ? (
+    <div className="toast-stack" aria-live="polite">
+      <div className={`toast-card card ${gateState.accent === "success" ? "toast-card-success" : "toast-card-danger"}`}>
+        <div className="toast-head">
+          <div className={`toast-icon ${gateState.accent === "success" ? "toast-icon-success" : "toast-icon-danger"}`}>
+            {gateState.accent === "success" ? <Check size={18} /> : <ShieldAlert size={18} />}
+          </div>
+          <button className="toast-close" type="button" aria-label="Fechar aviso" onClick={() => setGateState(null)}>
+            ×
+          </button>
+        </div>
+        <span className="toast-eyebrow">{gateState.accent === "success" ? "Execucao concluida" : "Permissao necessaria"}</span>
+        <strong className="toast-title">{gateState.title}</strong>
+        <p className="toast-copy">{gateState.message}</p>
+        <div className="toast-actions">
+          <button className="btn btn-primary" type="button" onClick={() => router.push("/tarefas")}>
+            Voltar para tarefas
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (!item && !gateState) {
     return <div className="empty">Carregando execução...</div>;
   }
 
   if (gateState) {
-    return (
-      <section className="state-screen" aria-live="polite">
-        <div className={`state-card card ${gateState.accent === "success" ? "state-card-success" : "state-card-danger"}`}>
-          <div className={`state-icon ${gateState.accent === "success" ? "state-icon-success" : "state-icon-danger"}`}>
-            {gateState.accent === "success" ? <Check size={24} /> : <ShieldAlert size={24} />}
-          </div>
-          <span className="eyebrow">{gateState.accent === "success" ? "Execucao concluida" : "Permissao necessaria"}</span>
-          <h1 className="title state-title">{gateState.title}</h1>
-          <p className="subtitle state-copy">{gateState.message}</p>
-          <div className="state-actions">
-            <button className="btn btn-primary" type="button" onClick={() => router.push("/tarefas")}>
-              Voltar para tarefas
-            </button>
-          </div>
-        </div>
-      </section>
-    );
+    return gateToast;
   }
 
   if (!item) {
@@ -2070,6 +2077,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
   return (
     <>
+      {gateToast}
       <Link href="/" className="btn btn-ghost"><ArrowLeft size={16} />Voltar</Link>
 
       <div className="pagehead">
