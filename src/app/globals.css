@@ -45,6 +45,11 @@
 .toast-copy{color:var(--muted);margin:6px 0 0;font-size:13px;line-height:1.4}
 .table tr.row-focus td{background:#eef8f3}
 .table tr.row-focus td:first-child{box-shadow:inset 4px 0 0 var(--brand)}
+.record-version-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px}
+.version-chip{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.version-chip-current{background:var(--soft);color:var(--brand)}
+.version-chip-legacy{background:#fff4df;color:#a7650e}
+.version-note{font-size:11px;color:var(--muted);white-space:nowrap}
 .pagination-bar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px;flex-wrap:wrap}
 .pagination-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .pagination-page{font-size:13px;color:var(--muted);font-weight:600}

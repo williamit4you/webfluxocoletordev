@@ -10,6 +10,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 const statusName = ["Em andamento", "Concluído", "Cancelado"];
 
+function versionLabel(instance: Instance) {
+  const version = instance.flowVersionNumber ? `v${instance.flowVersionNumber}` : "versão anterior";
+  return instance.isCurrentFlowVersion ? `${version} atual` : `${version} anterior`;
+}
+
 export default function DashboardPage() {
   const searchParams = useSearchParams();
   const [rows, setRows] = useState<Instance[]>([]);
@@ -39,13 +44,14 @@ export default function DashboardPage() {
   const selectedFlow = flows.find(flow => flow.id === flowId);
   const filtered = useMemo(() => {
     const startDateValue = startDate ? new Date(`${startDate}T00:00:00`) : null;
+    const selectedFlowKey = selectedFlow?.flowKey;
 
     return rows.filter(row =>
-      row.flowDefinitionId === flowId &&
+      (selectedFlowKey ? row.flowKey === selectedFlowKey : row.flowDefinitionId === flowId) &&
       (!search || row.code.toLowerCase().includes(search.toLowerCase())) &&
       (!startDateValue || new Date(row.createdAt) >= startDateValue) &&
       (statusFilter === "all" || String(row.status) === statusFilter));
-  }, [flowId, rows, search, startDate, statusFilter]);
+  }, [flowId, rows, search, selectedFlow?.flowKey, startDate, statusFilter]);
 
   useEffect(() => {
     if (!focusInstanceId || !focusedRowRef.current) {
@@ -159,7 +165,15 @@ export default function DashboardPage() {
                 } : null}
                 className={focusInstanceId === row.id ? "row-focus" : ""}
               >
-                <td><Link className="code" href={buildExecutionHref(row.id)}>{row.code}</Link></td>
+                <td>
+                  <Link className="code" href={buildExecutionHref(row.id)}>{row.code}</Link>
+                  <div className="record-version-line">
+                    <span className={`version-chip ${row.isCurrentFlowVersion ? "version-chip-current" : "version-chip-legacy"}`}>
+                      {versionLabel(row)}
+                    </span>
+                    {!row.isCurrentFlowVersion && <span className="version-note">não é o fluxo atual</span>}
+                  </div>
+                </td>
                 <td><span className={`badge ${row.status === 0 ? "inprogress" : row.status === 1 ? "completed" : "cancelled"}`}>{statusName[row.status]}</span></td>
                 <td><Trail steps={row.steps} /></td>
                 <td>{new Date(row.updatedAt).toLocaleDateString("pt-BR")}</td>
