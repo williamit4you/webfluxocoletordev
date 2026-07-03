@@ -2078,13 +2078,28 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       </div>
     </div>
   ) : null;
+  const showExecutionLoading = advancing || gateState?.accent === "success";
+  const executionLoadingOverlay = showExecutionLoading ? (
+    <div className="page-loading-overlay" aria-live="polite" aria-busy="true">
+      <div className="page-loading-card card">
+        <LoaderCircle size={22} className="spin" />
+        <strong>{gateState?.accent === "success" ? "Finalizando..." : "Concluindo etapa..."}</strong>
+        <span>{gateState?.accent === "success" ? "Aguarde enquanto retornamos para suas tarefas." : "Aguarde enquanto registramos a execução desta tarefa."}</span>
+      </div>
+    </div>
+  ) : null;
 
   if (!item && !gateState) {
     return <div className="empty">Carregando execução...</div>;
   }
 
   if (gateState && !item) {
-    return gateToast;
+    return (
+      <>
+        {executionLoadingOverlay}
+        {gateToast}
+      </>
+    );
   }
 
   if (!item) {
@@ -2093,7 +2108,8 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
   return (
     <>
-      {advancing && (
+      {executionLoadingOverlay}
+      {false && (
         <div className="page-loading-overlay" aria-live="polite" aria-busy="true">
           <div className="page-loading-card card">
             <LoaderCircle size={22} className="spin" />

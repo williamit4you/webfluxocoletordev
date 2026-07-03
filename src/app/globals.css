@@ -32,7 +32,7 @@
 .journey-diagram-details{border-top:1px solid var(--line);padding-top:10px}
 .journey-diagram-details-wide>div{padding-left:0!important}
 @media(max-width:900px){.step-diagram-canvas{grid-auto-columns:minmax(224px,224px);gap:38px}.diagram-node-card{min-height:180px;height:180px}.diagram-node:not(:last-child)::after{top:68px}}
-.toast-stack{position:fixed;top:88px;right:24px;z-index:30;pointer-events:none}
+.toast-stack{position:fixed;top:88px;right:24px;z-index:50;pointer-events:none}
 .toast-card{width:min(360px,calc(100vw - 32px));padding:14px 16px;border-left:4px solid var(--danger);background:#fff;pointer-events:auto;animation:toast-in-out 2.6s ease forwards}
 .toast-card-success{border-color:var(--brand);box-shadow:0 18px 40px rgba(23,107,81,.14)}
 .toast-card-danger{border-color:var(--danger);box-shadow:0 18px 40px rgba(201,77,69,.14)}
