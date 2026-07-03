@@ -1532,8 +1532,6 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           accent: "danger"
         }
     );
-    setItem(null);
-    setFlowDefinition(null);
     setError("");
     return true;
   }
@@ -1565,11 +1563,11 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     }
 
     const timeoutId = window.setTimeout(() => {
-      router.push("/tarefas");
+      setGateState(null);
     }, 2600);
 
     return () => window.clearTimeout(timeoutId);
-  }, [gateState, router]);
+  }, [gateState]);
 
   const currentStep = useMemo(
     () => item?.steps.find(step => step.id === item.currentStepExecutionId) ?? item?.steps.find(step => step.status === 1),
@@ -2071,7 +2069,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     return <div className="empty">Carregando execução...</div>;
   }
 
-  if (gateState) {
+  if (gateState && !item) {
     return gateToast;
   }
 
