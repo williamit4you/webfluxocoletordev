@@ -26,6 +26,7 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const visibleUsers = user?.role === "Admin" ? users.filter(item => item.role !== "SuperAdmin") : users;
 
   async function loadUsers() {
     setLoading(true);
@@ -204,7 +205,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map(item =>
+                {visibleUsers.map(item =>
                   <tr key={item.id}>
                     <td><strong>{item.name}</strong></td>
                     <td>{item.email}</td>
