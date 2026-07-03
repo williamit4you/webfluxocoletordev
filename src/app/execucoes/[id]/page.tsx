@@ -1522,9 +1522,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     setGateState(
       reason === "advance"
         ? {
-          title: "Acesso restrito",
-          message: "Etapa concluida. Voce nao possui permissao para acessar a proxima etapa desta execucao.",
-          accent: "danger"
+          title: "Execução realizada com sucesso",
+          message: "A etapa foi concluída e a próxima execução está disponível para outro responsável.",
+          accent: "success"
         }
         : {
           title: "Acesso negado",
