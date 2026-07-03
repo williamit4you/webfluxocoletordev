@@ -45,5 +45,8 @@
 .toast-copy{color:var(--muted);margin:6px 0 0;font-size:13px;line-height:1.4}
 .table tr.row-focus td{background:#eef8f3}
 .table tr.row-focus td:first-child{box-shadow:inset 4px 0 0 var(--brand)}
+.pagination-bar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px;flex-wrap:wrap}
+.pagination-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pagination-page{font-size:13px;color:var(--muted);font-weight:600}
 @keyframes toast-in-out{0%{opacity:0;transform:translate3d(24px,-10px,0) scale(.98)}12%,78%{opacity:1;transform:translate3d(0,0,0) scale(1)}100%{opacity:0;transform:translate3d(24px,-8px,0) scale(.98)}}
 @media(max-width:900px){.toast-stack{top:76px;right:16px;left:16px}.toast-card{width:100%}}

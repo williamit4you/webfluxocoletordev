@@ -8,19 +8,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type TaskFilter = "all" | "pending" | "completed" | "cancelled";
-
-function getInstanceStatusMeta(item: Instance) {
-  if (item.status === 1) {
-    return { key: "completed" as const, label: "Concluida" };
-  }
-
-  if (item.status === 2) {
-    return { key: "cancelled" as const, label: "Cancelada" };
-  }
-
-  return { key: "inprogress" as const, label: "Pendente" };
-}
+type PendingTasksResponse = {
+  items: Instance[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+};
 
 export default function TasksPage() {
   const searchParams = useSearchParams();
@@ -28,80 +21,39 @@ export default function TasksPage() {
   const [rows, setRows] = useState<Instance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [usingFallback, setUsingFallback] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<TaskFilter>((searchParams.get("statusFilter") as TaskFilter) || "all");
+  const [page, setPage] = useState(Number(searchParams.get("page") ?? "1"));
+  const [pageSize, setPageSize] = useState(Number(searchParams.get("pageSize") ?? "10"));
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [totalCount, setTotalCount] = useState(0);
   const focusInstanceId = searchParams.get("focusInstance") ?? "";
   const focusedRowRef = useRef<HTMLTableRowElement | null>(null);
 
   useEffect(() => {
-    api<Instance[]>("/instances")
+    setLoading(true);
+    api<PendingTasksResponse>(`/instances/pending-tasks?page=${page}&pageSize=${pageSize}&search=${encodeURIComponent(search)}`)
       .then(result => {
-        setRows(result);
-        setUsingFallback(false);
+        setRows(result.items);
+        setTotalCount(result.totalCount);
+        setError("");
       })
-      .catch(async () => {
-        try {
-          const fallbackRows = await api<Instance[]>("/instances/pending-tasks");
-          setRows(fallbackRows);
-          setUsingFallback(true);
-          setError("");
-        } catch (fallbackError) {
-          setError(fallbackError instanceof Error ? fallbackError.message : "Nao foi possivel carregar as tarefas.");
-        }
+      .catch(fetchError => {
+        setError(fetchError instanceof Error ? fetchError.message : "Não foi possível carregar as tarefas.");
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [page, pageSize, search]);
 
   const tasks = useMemo(() => rows.map(item => {
     const currentStep = item.steps.find(step => step.id === item.currentStepExecutionId) ?? item.steps.find(step => step.status === 1);
-    const status = getInstanceStatusMeta(item);
     const completedByUser = !!user?.id && item.steps.some(step => step.completedByUserId === user.id);
     const canExecute = item.status === 0 && !!currentStep && !currentStep.isAutomatic && currentStep.status === 1;
 
     return {
       item,
       currentStep,
-      status,
       completedByUser,
       canExecute
     };
   }), [rows, user?.id]);
-
-  const counts = useMemo(() => ({
-    all: tasks.length,
-    pending: tasks.filter(task => task.status.key === "inprogress").length,
-    completed: tasks.filter(task => task.status.key === "completed").length,
-    cancelled: tasks.filter(task => task.status.key === "cancelled").length
-  }), [tasks]);
-
-  const filteredTasks = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-
-    return tasks.filter(task => {
-      if (statusFilter === "pending" && task.status.key !== "inprogress") {
-        return false;
-      }
-
-      if (statusFilter === "completed" && task.status.key !== "completed") {
-        return false;
-      }
-
-      if (statusFilter === "cancelled" && task.status.key !== "cancelled") {
-        return false;
-      }
-
-      if (!normalizedSearch) {
-        return true;
-      }
-
-      return [
-        task.item.code,
-        task.item.flowName,
-        task.currentStep?.name ?? ""
-      ].some(value => value.toLowerCase().includes(normalizedSearch));
-    });
-  }, [search, statusFilter, tasks]);
 
   useEffect(() => {
     if (!focusInstanceId || !focusedRowRef.current) {
@@ -109,55 +61,55 @@ export default function TasksPage() {
     }
 
     focusedRowRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [focusInstanceId, filteredTasks.length]);
+  }, [focusInstanceId, tasks.length]);
 
   function buildExecutionHref(instanceId: string) {
     const params = new URLSearchParams();
-    if (statusFilter !== "all") {
-      params.set("statusFilter", statusFilter);
+    const row = rows.find(item => item.id === instanceId);
+    if (row?.flowDefinitionId) {
+      params.set("flowId", row.flowDefinitionId);
     }
     if (search) {
       params.set("search", search);
     }
+    params.set("page", String(page));
+    params.set("pageSize", String(pageSize));
     params.set("focusInstance", instanceId);
-
-    return `/execucoes/${instanceId}?returnTo=${encodeURIComponent(`/tarefas?${params.toString()}`)}`;
+    return `/execucoes/${instanceId}?returnTo=${encodeURIComponent(`/?${params.toString()}`)}`;
   }
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   return <>
     <div className="pagehead">
       <div>
         <span className="eyebrow">Operacao</span>
         <h1 className="title">Tarefas</h1>
-        <p className="subtitle">
-          {usingFallback
-            ? "Exibindo as tarefas que voce pode executar agora, com filtros de busca para localizar mais rapido."
-            : "Visualize tudo o que esta pendente, concluido ou cancelado, com filtros para encontrar mais rapido."}
-        </p>
+        <p className="subtitle">Exibindo apenas as próximas tarefas que você pode executar, com carregamento paginado para manter a tela rápida.</p>
       </div>
     </div>
 
     {!loading && !error && (
       <div className="metrics">
         <article className="card metric">
-          <div className="label">Total visivel</div>
-          <div className="value">{counts.all}</div>
-          <div className="hint">{usingFallback ? "tarefas carregadas" : "todas as execucoes"}</div>
+          <div className="label">Total disponível</div>
+          <div className="value">{totalCount}</div>
+          <div className="hint">tarefas executáveis</div>
         </article>
         <article className="card metric">
-          <div className="label">Pendentes</div>
-          <div className="value">{counts.pending}</div>
-          <div className="hint">prontas para acao</div>
+          <div className="label">Nesta página</div>
+          <div className="value">{tasks.length}</div>
+          <div className="hint">tarefas carregadas</div>
         </article>
         <article className="card metric">
-          <div className="label">Concluidas</div>
-          <div className="value">{counts.completed}</div>
-          <div className="hint">{usingFallback ? "indisponivel neste modo" : "ja finalizadas"}</div>
+          <div className="label">Página atual</div>
+          <div className="value">{page}</div>
+          <div className="hint">de {totalPages}</div>
         </article>
         <article className="card metric">
-          <div className="label">Canceladas</div>
-          <div className="value">{counts.cancelled}</div>
-          <div className="hint">{usingFallback ? "indisponivel neste modo" : "fora da operacao"}</div>
+          <div className="label">Exibição</div>
+          <div className="value">{pageSize}</div>
+          <div className="hint">itens por página</div>
         </article>
       </div>
     )}
@@ -168,10 +120,6 @@ export default function TasksPage() {
 
       {!loading && !error && (
         <>
-          {usingFallback && <div className="notice" style={{ margin: 16 }}>
-            A listagem completa ainda nao respondeu como esperado no backend. Por enquanto, esta tela carregou automaticamente as tarefas pendentes disponiveis para execucao.
-          </div>}
-
           <div className="filters">
             <label className="field search">
               <span>Buscar</span>
@@ -181,26 +129,31 @@ export default function TasksPage() {
                   className="input"
                   style={{ paddingLeft: 38 }}
                   value={search}
-                  onChange={e => setSearch(e.target.value)}
+                  onChange={e => {
+                    setPage(1);
+                    setSearch(e.target.value);
+                  }}
                   placeholder="Registro, fluxo ou etapa atual"
                 />
               </div>
             </label>
 
             <label className="field" style={{ minWidth: 220 }}>
-              <span>Status</span>
-              <select className="select" value={statusFilter} onChange={e => setStatusFilter(e.target.value as TaskFilter)}>
-                <option value="all">Todas ({counts.all})</option>
-                <option value="pending">Pendentes ({counts.pending})</option>
-                {!usingFallback && <option value="completed">Concluidas ({counts.completed})</option>}
-                {!usingFallback && <option value="cancelled">Canceladas ({counts.cancelled})</option>}
+              <span>Exibir</span>
+              <select className="select" value={pageSize} onChange={e => {
+                setPage(1);
+                setPageSize(Number(e.target.value));
+              }}>
+                <option value={10}>10 tarefas</option>
+                <option value={30}>30 tarefas</option>
+                <option value={50}>50 tarefas</option>
               </select>
             </label>
           </div>
 
-          {filteredTasks.length === 0 && <div className="empty">Nenhuma tarefa encontrada com os filtros atuais.</div>}
+          {tasks.length === 0 && <div className="empty">Nenhuma tarefa encontrada com os filtros atuais.</div>}
 
-          {filteredTasks.length > 0 && (
+          {tasks.length > 0 && (
             <table className="table">
               <thead>
                 <tr>
@@ -213,7 +166,7 @@ export default function TasksPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredTasks.map(({ item, currentStep, status, completedByUser, canExecute }) => (
+                {tasks.map(({ item, currentStep, completedByUser, canExecute }) => (
                   <tr
                     key={item.id}
                     ref={focusInstanceId === item.id ? element => {
@@ -227,9 +180,9 @@ export default function TasksPage() {
                     </td>
                     <td>{item.flowName}</td>
                     <td>
-                      <span className={`badge ${status.key}`}>{status.label}</span>
+                      <span className="badge inprogress">Pendente</span>
                     </td>
-                    <td>{currentStep?.name ?? (status.key === "completed" ? "Fluxo concluido" : "Sem etapa manual")}</td>
+                    <td>{currentStep?.name ?? "Sem etapa manual"}</td>
                     <td>{new Date(item.updatedAt).toLocaleString("pt-BR")}</td>
                     <td>
                       <Link className="btn btn-primary" href={buildExecutionHref(item.id)}>
@@ -242,6 +195,21 @@ export default function TasksPage() {
               </tbody>
             </table>
           )}
+
+          <div className="pagination-bar">
+            <span className="section-copy" style={{ margin: 0 }}>
+              Mostrando {tasks.length} de {totalCount} tarefas.
+            </span>
+            <div className="pagination-actions">
+              <button className="btn btn-secondary" type="button" onClick={() => setPage(current => Math.max(1, current - 1))} disabled={page <= 1}>
+                Anterior
+              </button>
+              <span className="pagination-page">Página {page} de {totalPages}</span>
+              <button className="btn btn-secondary" type="button" onClick={() => setPage(current => Math.min(totalPages, current + 1))} disabled={page >= totalPages}>
+                Próxima
+              </button>
+            </div>
+          </div>
         </>
       )}
     </section>
