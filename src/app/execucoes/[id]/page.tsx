@@ -3,7 +3,7 @@
 import { api } from "@/lib/api";
 import { readDanfeInBrowser as readDanfeFileInBrowser } from "@/lib/danfeReader";
 import type { ExecutionField, FieldOption, Flow, Instance, StepApiConfig } from "@/lib/types";
-import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Paperclip, Play, RotateCw, Save, Square } from "lucide-react";
+import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Paperclip, Play, RotateCw, Save, ShieldAlert, Square } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
@@ -39,6 +39,12 @@ type UploadAsset = {
 type ReaderParseResult = {
   fields: Record<string, unknown>;
   warnings: string[];
+};
+
+type ExecutionGateState = {
+  title: string;
+  message: string;
+  accent: "danger" | "success";
 };
 
 const PDF_JS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
@@ -1482,6 +1488,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const [item, setItem] = useState<Instance | null>(null);
   const [flowDefinition, setFlowDefinition] = useState<Flow | null>(null);
   const [error, setError] = useState("");
+  const [gateState, setGateState] = useState<ExecutionGateState | null>(null);
   const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1512,8 +1519,22 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       return false;
     }
 
-    window.alert(reason === "advance" ? "Acao realizada com sucesso." : "Acesso negado.");
-    router.push("/tarefas");
+    setGateState(
+      reason === "advance"
+        ? {
+          title: "Etapa concluida com sucesso",
+          message: "Sua tarefa foi finalizada e voce nao possui permissao para acessar a proxima etapa desta execucao.",
+          accent: "success"
+        }
+        : {
+          title: "Acesso negado",
+          message: "Voce nao possui permissao para visualizar esta execucao no momento.",
+          accent: "danger"
+        }
+    );
+    setItem(null);
+    setFlowDefinition(null);
+    setError("");
     return true;
   }
 
@@ -2019,8 +2040,32 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     }
   }
 
-  if (!item) {
+  if (!item && !gateState) {
     return <div className="empty">Carregando execução...</div>;
+  }
+
+  if (gateState) {
+    return (
+      <section className="state-screen" aria-live="polite">
+        <div className={`state-card card ${gateState.accent === "success" ? "state-card-success" : "state-card-danger"}`}>
+          <div className={`state-icon ${gateState.accent === "success" ? "state-icon-success" : "state-icon-danger"}`}>
+            {gateState.accent === "success" ? <Check size={24} /> : <ShieldAlert size={24} />}
+          </div>
+          <span className="eyebrow">{gateState.accent === "success" ? "Execucao concluida" : "Permissao necessaria"}</span>
+          <h1 className="title state-title">{gateState.title}</h1>
+          <p className="subtitle state-copy">{gateState.message}</p>
+          <div className="state-actions">
+            <button className="btn btn-primary" type="button" onClick={() => router.push("/tarefas")}>
+              Voltar para tarefas
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!item) {
+    return null;
   }
 
   return (
