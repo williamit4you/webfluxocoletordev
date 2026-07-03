@@ -1497,7 +1497,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const video = useRef<HTMLVideoElement>(null);
   const fieldRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  function exitIfForbidden(cause: unknown) {
+  function exitIfForbidden(cause: unknown, reason: "view" | "advance" = "view") {
     if (!(cause instanceof Error) || cause.message !== "Acesso negado.") {
       return false;
     }
@@ -1507,7 +1507,17 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     return true;
   }
 
-  const load = () => api<Instance>(`/instances/${id}`)
+  function handleForbiddenRedirect(cause: unknown, reason: "view" | "advance" = "view") {
+    if (!(cause instanceof Error) || cause.message !== "Acesso negado.") {
+      return false;
+    }
+
+    window.alert(reason === "advance" ? "Acao realizada com sucesso." : "Acesso negado.");
+    router.push("/tarefas");
+    return true;
+  }
+
+  const load = (reason: "view" | "advance" = "view") => api<Instance>(`/instances/${id}`)
     .then(async result => {
       syncCurrentStepState(result, setItem, setFormData, setNotes);
       try {
@@ -1517,7 +1527,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       }
     })
     .catch(e => {
-      if (exitIfForbidden(e)) {
+      if (handleForbiddenRedirect(e, reason)) {
         return;
       }
 
@@ -1525,7 +1535,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     });
 
   useEffect(() => {
-    void load();
+    void load("view");
   }, [id]);
 
   const currentStep = useMemo(
@@ -1965,9 +1975,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           data: sanitizeStepPayload(currentStep, formData)
         })
       });
-      await load();
+      await load("advance");
     } catch (e) {
-      if (exitIfForbidden(e)) {
+      if (handleForbiddenRedirect(e)) {
         return;
       }
 
