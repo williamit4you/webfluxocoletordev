@@ -1,15 +1,21 @@
 "use client";
 
 import { api } from "@/lib/api";
-import type { Flow } from "@/lib/types";
-import { Play } from "lucide-react";
+import type { Flow, Instance } from "@/lib/types";
+import { Play, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+
+type EntryToastState = {
+  title: string;
+  message: string;
+};
 
 export default function EntryPage() {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [flowId, setFlowId] = useState("");
   const [warning, setWarning] = useState("");
+  const [toast, setToast] = useState<EntryToastState | null>(null);
   const [creating, setCreating] = useState(false);
   const router = useRouter();
 
@@ -27,6 +33,18 @@ export default function EntryPage() {
   const flow = flows.find(item => item.id === flowId);
   const firstStep = flow?.steps[0];
 
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setToast(null);
+    }, 2600);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [toast]);
+
   async function createInstance() {
     if (!flow) {
       return;
@@ -41,6 +59,20 @@ export default function EntryPage() {
         body: JSON.stringify({ flowDefinitionId: flow.id, data: {} })
       });
 
+      try {
+        await api<Instance>(`/instances/${result.id}`);
+      } catch (e) {
+        if (e instanceof Error && e.message === "Acesso negado.") {
+          setToast({
+            title: "Acesso negado",
+            message: "Voce nao possui permissao para acessar a execucao criada."
+          });
+          return;
+        }
+
+        throw e;
+      }
+
       router.push(`/execucoes/${result.id}`);
     } catch (e) {
       setWarning(e instanceof Error ? e.message : "Falha ao iniciar o fluxo.");
@@ -50,6 +82,21 @@ export default function EntryPage() {
   }
 
   return <>
+    {toast && (
+      <div className="toast-stack" aria-live="polite">
+        <div className="toast-card toast-card-danger card">
+          <div className="toast-head">
+            <div className="toast-icon toast-icon-danger">
+              <ShieldAlert size={18} />
+            </div>
+          </div>
+          <span className="toast-eyebrow">Permissao necessaria</span>
+          <strong className="toast-title">{toast.title}</strong>
+          <p className="toast-copy">{toast.message}</p>
+        </div>
+      </div>
+    )}
+
     <div className="pagehead">
       <div>
         <span className="eyebrow">Operacao</span>
