@@ -1563,11 +1563,16 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     }
 
     const timeoutId = window.setTimeout(() => {
+      if (gateState.accent === "success") {
+        router.push("/tarefas");
+        return;
+      }
+
       setGateState(null);
     }, 2600);
 
     return () => window.clearTimeout(timeoutId);
-  }, [gateState]);
+  }, [gateState, router]);
 
   const currentStep = useMemo(
     () => item?.steps.find(step => step.id === item.currentStepExecutionId) ?? item?.steps.find(step => step.status === 1),
