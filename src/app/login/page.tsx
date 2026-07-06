@@ -8,8 +8,8 @@ import { api } from "@/lib/api";
 import type { User } from "@/lib/types";
 
 export default function Login() {
-  const [email, setEmail] = useState("diogo@it4you.inf.br");
-  const [password, setPassword] = useState("Diogo#2026");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -61,13 +61,27 @@ export default function Login() {
 
           <div className="field">
             <label>E-mail</label>
-            <input className="input" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+            <input
+              className="input"
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              autoComplete="email"
+              required
+            />
           </div>
 
           <div className="field" style={{ marginTop: 16 }}>
             <label>Senha</label>
             <div className="password-wrap">
-              <input className="input" type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} required />
+              <input
+                className="input"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
               <button
                 className="icon-btn"
                 type="button"
