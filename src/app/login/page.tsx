@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { Activity, AlertCircle, ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
 
 import { api } from "@/lib/api";
 import type { User } from "@/lib/types";
@@ -15,6 +15,11 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  useEffect(() => {
+    localStorage.removeItem("flowtrack_token");
+    localStorage.removeItem("flowtrack_user");
+  }, []);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -23,7 +28,8 @@ export default function Login() {
     try {
       const data = await api<{ token: string; user: User }>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password }),
+        suppressUnauthorizedRedirect: true
       });
 
       localStorage.setItem("flowtrack_token", data.token);
@@ -31,7 +37,11 @@ export default function Login() {
       router.push("/");
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Credenciais inválidas");
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Nao foi possivel entrar. Revise seu e-mail e senha e tente novamente."
+      );
     } finally {
       setLoading(false);
     }
@@ -47,17 +57,30 @@ export default function Login() {
           It4you Track
         </div>
 
-        <h1>Do portão à produção, tudo sob controle.</h1>
-        <p>Acompanhe cada passagem do processo, encontre gargalos e saiba exatamente o próximo passo.</p>
+        <h1>Do portao a producao, tudo sob controle.</h1>
+        <p>Acompanhe cada passagem do processo, encontre gargalos e saiba exatamente qual e o proximo passo.</p>
       </section>
 
       <section className="login-form">
         <form className="login-box" onSubmit={submit}>
           <span className="eyebrow">Bem-vindo</span>
           <h2>Acesse sua conta</h2>
-          <p>Use suas credenciais para entrar na operação.</p>
+          <p>Entre com suas credenciais para continuar na operacao com seguranca.</p>
 
-          {error && <div className="error">{error}</div>}
+          <div className="notice" style={{ marginBottom: 18 }}>
+            <ShieldCheck size={16} style={{ verticalAlign: "text-bottom", marginRight: 8 }} />
+            Seus dados de acesso sao usados apenas para autenticar sua sessao atual.
+          </div>
+
+          {error && (
+            <div className="error" role="alert" aria-live="polite">
+              <AlertCircle size={16} style={{ flex: "0 0 auto", marginTop: 1 }} />
+              <div>
+                <strong>Falha ao entrar</strong>
+                <div>{error}</div>
+              </div>
+            </div>
+          )}
 
           <div className="field">
             <label>E-mail</label>
@@ -65,8 +88,15 @@ export default function Login() {
               className="input"
               type="email"
               value={email}
-              onChange={e => setEmail(e.target.value)}
+              onChange={e => {
+                setEmail(e.target.value);
+                if (error) setError("");
+              }}
               autoComplete="email"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="voce@empresa.com"
               required
             />
           </div>
@@ -78,8 +108,12 @@ export default function Login() {
                 className="input"
                 type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={e => {
+                  setPassword(e.target.value);
+                  if (error) setError("");
+                }}
                 autoComplete="current-password"
+                placeholder="Digite sua senha"
                 required
               />
               <button
@@ -95,7 +129,7 @@ export default function Login() {
           </div>
 
           <button className="btn btn-primary" style={{ width: "100%", marginTop: 22 }} disabled={loading}>
-            {loading ? "Entrando…" : "Entrar"}
+            {loading ? "Entrando..." : "Entrar"}
             <ArrowRight size={17} />
           </button>
         </form>

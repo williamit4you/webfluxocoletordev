@@ -1,20 +1,25 @@
 const BASE = "/api/proxy";
 
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+type ApiOptions = RequestInit & {
+  suppressUnauthorizedRedirect?: boolean;
+};
+
+export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const token = typeof window !== "undefined" ? localStorage.getItem("flowtrack_token") : null;
   const headers = new Headers(options.headers);
+  const { suppressUnauthorizedRedirect = false, ...requestOptions } = options;
 
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  if (options.body && !(options.body instanceof FormData)) {
+  if (requestOptions.body && !(requestOptions.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(`${BASE}${path}`, { ...options, headers, cache: "no-store" });
+  const response = await fetch(`${BASE}${path}`, { ...requestOptions, headers, cache: "no-store" });
 
-  if (response.status === 401 && typeof window !== "undefined") {
+  if (response.status === 401 && !suppressUnauthorizedRedirect && typeof window !== "undefined") {
     localStorage.clear();
     window.location.href = "/login";
     throw new Error("Sessao expirada");
@@ -25,7 +30,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
     try {
       const body = await response.json();
-      const firstError = body.errors ? Object.values(body.errors)[0] as string[] : null;
+      const firstError = body.errors ? (Object.values(body.errors)[0] as string[]) : null;
       message = body.message || firstError?.[0] || body.title || message;
     } catch {
       // Keep fallback message when the response body is not JSON.

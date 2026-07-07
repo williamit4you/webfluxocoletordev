@@ -60,3 +60,4 @@
 @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 @keyframes toast-in-out{0%{opacity:0;transform:translate3d(24px,-10px,0) scale(.98)}12%,78%{opacity:1;transform:translate3d(0,0,0) scale(1)}100%{opacity:0;transform:translate3d(24px,-8px,0) scale(.98)}}
 @media(max-width:900px){.toast-stack{top:76px;right:16px;left:16px}.toast-card{width:100%}}
+ .error{display:flex;gap:10px;align-items:flex-start;background:#fff3f2;color:#8e2f29;border:1px solid #f1c7c3;border-radius:12px;padding:13px 14px;font-size:13px;margin-bottom:15px}.error strong{display:block;font-size:13px;margin-bottom:3px}.notice{padding:14px;border-radius:12px;background:#eef6ff;color:#315d86;font-size:13px;border:1px solid #d8e8fb}
