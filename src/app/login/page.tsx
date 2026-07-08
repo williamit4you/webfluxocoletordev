@@ -57,19 +57,19 @@ export default function Login() {
           It4you Track
         </div>
 
-        <h1>Do portao a producao, tudo sob controle.</h1>
-        <p>Acompanhe cada passagem do processo, encontre gargalos e saiba exatamente qual e o proximo passo.</p>
+        <h1>Do portão a produção, tudo sob controle.</h1>
+        <p>Acompanhe cada passagem do processo, encontre gargalos e saiba exatamente qual e o próximo passo.</p>
       </section>
 
       <section className="login-form">
         <form className="login-box" onSubmit={submit}>
           <span className="eyebrow">Bem-vindo</span>
           <h2>Acesse sua conta</h2>
-          <p>Entre com suas credenciais para continuar na operacao com seguranca.</p>
+          <p>Entre com suas credenciais para continuar na operação com seguranca.</p>
 
           <div className="notice" style={{ marginBottom: 18 }}>
             <ShieldCheck size={16} style={{ verticalAlign: "text-bottom", marginRight: 8 }} />
-            Seus dados de acesso sao usados apenas para autenticar sua sessao atual.
+            Seus dados de acesso são usados apenas para autenticar sua sessão atual.
           </div>
 
           {error && (

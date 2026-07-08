@@ -99,9 +99,9 @@ export default function EntryPage() {
 
     <div className="pagehead">
       <div>
-        <span className="eyebrow">Operacao</span>
+        <span className="eyebrow">Operação</span>
         <h1 className="title">Nova entrada</h1>
-        <p className="subtitle">Escolha o fluxo e inicie. A coleta de dados acontece na primeira etapa da execucao.</p>
+        <p className="subtitle">Escolha o fluxo e inicie. A coleta de dados acontece na primeira etapa da execução.</p>
       </div>
     </div>
 
