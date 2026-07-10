@@ -634,7 +634,10 @@ type IntegrationFieldReference = {
 };
 
 type BuilderSectionKey =
+  | "flowBasics"
   | "flowUsers"
+  | "flowTokens"
+  | "flowSteps"
   | "stepBasics"
   | "fields"
   | "autoSchedule"
@@ -935,7 +938,10 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
   const [dragStepIndex, setDragStepIndex] = useState<number | null>(null);
   const [dropStepIndex, setDropStepIndex] = useState<number | null>(null);
   const [openSections, setOpenSections] = useState<BuilderSectionState>({
-    flowUsers: true,
+    flowBasics: false,
+    flowUsers: false,
+    flowTokens: false,
+    flowSteps: false,
     stepBasics: true,
     fields: true,
     autoSchedule: true,
@@ -1579,137 +1585,161 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     {flowId && !isDraft && <div className="notice">Esta versao publicada esta protegida. Crie um rascunho para editar sem afetar as execucoes em andamento.</div>}
 
     <section className="card formcard">
-      <h2 className="section-title">Informacoes basicas</h2>
-      <p className="section-copy">Defina a identidade do fluxo e mantenha o cadastro ativo para a operacao.</p>
-      {flowId && (
-        <div className="data-list flow-version-panel" style={{ padding: "0 0 20px" }}>
-          <div className="data-item">
-            <small>Versao do fluxo</small>
-            <strong>v{flowVersion}</strong>
-            <div className="section-copy" style={{ marginTop: 6 }}>
-              Esta e a versao exata usada para diferenciar configuracoes antigas e novas do mesmo fluxo.
+      <AccordionSection
+        title="Informacoes basicas"
+        description="Defina a identidade do fluxo e mantenha o cadastro ativo para a operacao."
+        open={openSections.flowBasics}
+        onToggle={() => toggleSection("flowBasics")}
+      >
+        {flowId && (
+          <div className="data-list flow-version-panel" style={{ padding: "0 0 20px" }}>
+            <div className="data-item">
+              <small>Versao do fluxo</small>
+              <strong>v{flowVersion}</strong>
+              <div className="section-copy" style={{ marginTop: 6 }}>
+                Esta e a versao exata usada para diferenciar configuracoes antigas e novas do mesmo fluxo.
+              </div>
+            </div>
+            <div className="data-item">
+              <small>Estado da versao</small>
+              <strong>{isDraft ? "Rascunho" : "Publicado"}</strong>
+              <div className="section-copy" style={{ marginTop: 6 }}>
+                {isDraft
+                  ? "Alteracoes feitas aqui valem para esta versao de trabalho ate a publicacao."
+                  : "Esta versao publicada permanece como referencia do que ja estava valendo."}
+              </div>
             </div>
           </div>
-          <div className="data-item">
-            <small>Estado da versao</small>
-            <strong>{isDraft ? "Rascunho" : "Publicado"}</strong>
-            <div className="section-copy" style={{ marginTop: 6 }}>
-              {isDraft
-                ? "Alteracoes feitas aqui valem para esta versao de trabalho ate a publicacao."
-                : "Esta versao publicada permanece como referencia do que ja estava valendo."}
-            </div>
+        )}
+        <div className="formgrid">
+          <div className="field">
+            <label>Nome do fluxo *</label>
+            <input className="input" value={name} onChange={e => setName(e.target.value)} disabled={!isDraft} />
+          </div>
+          <div className="field">
+            <label>Status</label>
+            <label className="toggle-line">
+              <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} disabled={!isDraft} />
+              Fluxo ativo para novas entradas
+            </label>
+          </div>
+          <div className="field span2">
+            <label>Descricao</label>
+            <textarea className="textarea" value={description} onChange={e => setDescription(e.target.value)} disabled={!isDraft} />
           </div>
         </div>
-      )}
-      <div className="formgrid">
-        <div className="field">
-          <label>Nome do fluxo *</label>
-          <input className="input" value={name} onChange={e => setName(e.target.value)} disabled={!isDraft} />
-        </div>
-        <div className="field">
-          <label>Status</label>
-          <label className="toggle-line">
-            <input type="checkbox" checked={active} onChange={e => setActive(e.target.checked)} disabled={!isDraft} />
-            Fluxo ativo para novas entradas
-          </label>
-        </div>
-        <div className="field span2">
-          <label>Descricao</label>
-          <textarea className="textarea" value={description} onChange={e => setDescription(e.target.value)} disabled={!isDraft} />
-        </div>
-      </div>
+      </AccordionSection>
 
-      <hr className="divider" />
+      <AccordionSection
+        title="Usuarios do fluxo"
+        description="Quem estiver vinculado ao fluxo pode localizar e executar tarefas deste fluxo inteiro."
+        open={openSections.flowUsers}
+        onToggle={() => toggleSection("flowUsers")}
+        soft
+      >
+        <div className="edit-panel" style={{ marginBottom: 0 }}>
+          {users.length === 0 && <div className="empty compact">Nenhum usuario disponivel para vincular.</div>}
 
-      <div className="section-header">
-        <div>
-          <h2 className="section-title">Tokens do fluxo</h2>
-          <p className="section-copy">Cadastre credenciais reutilizaveis para as integracoes das etapas.</p>
+          {users.length > 0 && <>
+            <input className="input" placeholder="Buscar usuario no fluxo..." value={flowUserFilter} onChange={e => setFlowUserFilter(e.target.value)} disabled={!isDraft} />
+            <div style={{ marginTop: 12, maxHeight: 220, overflow: "auto", border: "1px solid var(--line)", borderRadius: 12, padding: 10, display: "grid", gap: 8 }}>
+              {filteredFlowUsers.map(user => <label key={user.id} className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: assignedUserIds.includes(user.id) ? "#eef7f2" : "#fff" }}>
+                <input type="checkbox" checked={assignedUserIds.includes(user.id)} onChange={() => toggleFlowUser(user.id)} disabled={!isDraft} />
+                {user.name} <small style={{ color: "var(--muted)" }}>{user.email}</small>
+              </label>)}
+              {filteredFlowUsers.length === 0 && <div className="empty compact">Nenhum usuario encontrado.</div>}
+            </div>
+          </>}
         </div>
-        <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => setTokens(current => [...current, createToken()])}>
+      </AccordionSection>
+
+      <AccordionSection
+        title="Tokens do fluxo"
+        description="Cadastre credenciais reutilizaveis para as integracoes das etapas."
+        open={openSections.flowTokens}
+        onToggle={() => toggleSection("flowTokens")}
+        actions={<button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => setTokens(current => [...current, createToken()])}>
           <Shield size={16} />
           Adicionar token
-        </button>
-      </div>
-
-      <div className="token-list">
-        {tokens.length === 0 && <div className="empty compact">Nenhum token cadastrado neste fluxo.</div>}
-        {tokens.map((token, index) =>
-          <div className="token-card" key={`${token.id ?? "new"}-${index}`}>
-            <div className="token-grid">
-              <div className="field">
-                <label>Nome</label>
-                <input className="input" value={token.name} onChange={e => updateToken(index, { name: e.target.value })} disabled={!isDraft} />
-              </div>
-              <div className="field">
-                <label>Tipo</label>
-                <select className="select" value={token.type} onChange={e => changeTokenType(index, Number(e.target.value))} disabled={!isDraft}>
-                  <option value={0}>Bearer</option>
-                  <option value={1}>Header customizado / API key</option>
-                </select>
-                <div className="section-copy" style={{ marginTop: 8 }}>
-                  {token.type === 0
-                    ? "Envia automaticamente no formato Authorization: Bearer SEU_TOKEN."
-                    : "Use para headers como Riosoft-Token, X-API-Key ou outro nome exigido pela API."}
+        </button>}
+      >
+        <div className="token-list">
+          {tokens.length === 0 && <div className="empty compact">Nenhum token cadastrado neste fluxo.</div>}
+          {tokens.map((token, index) =>
+            <div className="token-card" key={`${token.id ?? "new"}-${index}`}>
+              <div className="token-grid">
+                <div className="field">
+                  <label>Nome</label>
+                  <input className="input" value={token.name} onChange={e => updateToken(index, { name: e.target.value })} disabled={!isDraft} />
+                </div>
+                <div className="field">
+                  <label>Tipo</label>
+                  <select className="select" value={token.type} onChange={e => changeTokenType(index, Number(e.target.value))} disabled={!isDraft}>
+                    <option value={0}>Bearer</option>
+                    <option value={1}>Header customizado / API key</option>
+                  </select>
+                  <div className="section-copy" style={{ marginTop: 8 }}>
+                    {token.type === 0
+                      ? "Envia automaticamente no formato Authorization: Bearer SEU_TOKEN."
+                      : "Use para headers como Riosoft-Token, X-API-Key ou outro nome exigido pela API."}
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Header</label>
+                  <input
+                    className="input"
+                    placeholder={token.type === 0 ? "Authorization" : "Riosoft-Token, X-API-Key..."}
+                    value={token.headerName ?? ""}
+                    onChange={e => updateToken(index, { headerName: e.target.value })}
+                    disabled={!isDraft || token.type === 0}
+                  />
+                  <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {token.type === 0 && <button className="btn btn-ghost" type="button" disabled>
+                      {tokenTypeLabel(token.type)} usa Authorization
+                    </button>}
+                    {token.type === 1 && <>
+                      <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => applyTokenHeaderPreset(index, "Riosoft-Token")}>
+                        Usar Riosoft-Token
+                      </button>
+                      <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => applyTokenHeaderPreset(index, "riosoft-token")}>
+                        Usar riosoft-token
+                      </button>
+                      <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => applyTokenHeaderPreset(index, "X-API-Key")}>
+                        Usar X-API-Key
+                      </button>
+                    </>}
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Valor</label>
+                  <div className="password-wrap">
+                    <input className="input" type={visibleTokens[index] ? "text" : "password"} value={token.value ?? ""} onChange={e => updateToken(index, { value: e.target.value })} disabled={!isDraft} />
+                    <button className="icon-btn" type="button" onClick={() => setVisibleTokens(current => ({ ...current, [index]: !current[index] }))}>
+                      {visibleTokens[index] ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
               </div>
-              <div className="field">
-                <label>Header</label>
-                <input
-                  className="input"
-                  placeholder={token.type === 0 ? "Authorization" : "Riosoft-Token, X-API-Key..."}
-                  value={token.headerName ?? ""}
-                  onChange={e => updateToken(index, { headerName: e.target.value })}
-                  disabled={!isDraft || token.type === 0}
-                />
-                <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {token.type === 0 && <button className="btn btn-ghost" type="button" disabled>
-                    {tokenTypeLabel(token.type)} usa Authorization
-                  </button>}
-                  {token.type === 1 && <>
-                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => applyTokenHeaderPreset(index, "Riosoft-Token")}>
-                      Usar Riosoft-Token
-                    </button>
-                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => applyTokenHeaderPreset(index, "riosoft-token")}>
-                      Usar riosoft-token
-                    </button>
-                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => applyTokenHeaderPreset(index, "X-API-Key")}>
-                      Usar X-API-Key
-                    </button>
-                  </>}
-                </div>
+              <div className="row-actions">
+                <label className="toggle-line">
+                  <input type="checkbox" checked={token.active} onChange={e => updateToken(index, { active: e.target.checked })} disabled={!isDraft} />
+                  Token ativo
+                </label>
+                <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => setTokens(current => current.filter((_, tokenIndex) => tokenIndex !== index))}>
+                  <Trash2 size={16} />
+                  Remover
+                </button>
               </div>
-              <div className="field">
-                <label>Valor</label>
-                <div className="password-wrap">
-                  <input className="input" type={visibleTokens[index] ? "text" : "password"} value={token.value ?? ""} onChange={e => updateToken(index, { value: e.target.value })} disabled={!isDraft} />
-                  <button className="icon-btn" type="button" onClick={() => setVisibleTokens(current => ({ ...current, [index]: !current[index] }))}>
-                    {visibleTokens[index] ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="row-actions">
-              <label className="toggle-line">
-                <input type="checkbox" checked={token.active} onChange={e => updateToken(index, { active: e.target.checked })} disabled={!isDraft} />
-                Token ativo
-              </label>
-              <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => setTokens(current => current.filter((_, tokenIndex) => tokenIndex !== index))}>
-                <Trash2 size={16} />
-                Remover
-              </button>
-            </div>
-          </div>)}
-      </div>
-
-      <hr className="divider" />
-
-      <div className="section-header">
-        <div>
-          <h2 className="section-title">Etapas sequenciais</h2>
-          <p className="section-copy">Use o lapis para abrir os campos e a configuracao especifica de cada etapa.</p>
+            </div>)}
         </div>
-        <div className="builder-toolbar">
+      </AccordionSection>
+
+      <AccordionSection
+        title="Etapas sequenciais"
+        description="Use o lapis para abrir os campos e a configuracao especifica de cada etapa."
+        open={openSections.flowSteps}
+        onToggle={() => toggleSection("flowSteps")}
+        actions={<div className="builder-toolbar">
           <div className="view-toggle" role="tablist" aria-label="Modo de visualizacao das etapas">
             <button
               className={`view-toggle-btn ${builderView === "diagram" ? "active" : ""}`}
@@ -1734,10 +1764,9 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
             <Plus size={16} />
             Adicionar etapa
           </button>
-        </div>
-      </div>
-
-      <div className={`step-board ${builderView === "diagram" ? "step-board-diagram" : ""}`}>
+        </div>}
+      >
+        <div className={`step-board ${builderView === "diagram" ? "step-board-diagram" : ""}`}>
         {builderView === "list"
           ? <div className="step-list">
             {steps.map((step, index) =>
@@ -1835,29 +1864,6 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
             </div>
             <Workflow size={20} />
           </div>
-
-          <AccordionSection
-            title="Acesso ao fluxo"
-            description="Quem estiver vinculado ao fluxo pode localizar e executar tarefas deste fluxo inteiro."
-            open={openSections.flowUsers}
-            onToggle={() => toggleSection("flowUsers")}
-            soft
-          >
-            <div className="edit-panel" style={{ marginBottom: 0 }}>
-              {users.length === 0 && <div className="empty compact">Nenhum usuario disponivel para vincular.</div>}
-
-              {users.length > 0 && <>
-                <input className="input" placeholder="Buscar usuario no fluxo..." value={flowUserFilter} onChange={e => setFlowUserFilter(e.target.value)} disabled={!isDraft} />
-                <div style={{ marginTop: 12, maxHeight: 220, overflow: "auto", border: "1px solid var(--line)", borderRadius: 12, padding: 10, display: "grid", gap: 8 }}>
-                  {filteredFlowUsers.map(user => <label key={user.id} className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: assignedUserIds.includes(user.id) ? "#eef7f2" : "#fff" }}>
-                    <input type="checkbox" checked={assignedUserIds.includes(user.id)} onChange={() => toggleFlowUser(user.id)} disabled={!isDraft} />
-                    {user.name} <small style={{ color: "var(--muted)" }}>{user.email}</small>
-                  </label>)}
-                  {filteredFlowUsers.length === 0 && <div className="empty compact">Nenhum usuario encontrado.</div>}
-                </div>
-              </>}
-            </div>
-          </AccordionSection>
 
           <AccordionSection
             title="Cadastro da etapa"
@@ -2365,6 +2371,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
           </AccordionSection>}
         </div>}
       </div>
+      </AccordionSection>
 
       <div className="actions">
         <button className="btn btn-secondary" type="button" onClick={() => router.back()}>Cancelar</button>
