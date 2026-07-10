@@ -579,7 +579,7 @@ function parseDanfeText(text: string) {
 
   const warnings: string[] = [];
   if (Object.keys(fields).length === 0) {
-    warnings.push("NÃ£o foi possÃ­vel identificar dados da nota no navegador. Confirme se o PDF possui texto selecionÃ¡vel.");
+    warnings.push("Não foi possível identificar dados da nota no navegador. Confirme se o PDF possui texto selecionável.");
   }
 
   return { fields, warnings };
@@ -596,7 +596,7 @@ async function loadPdfJs() {
       if (existingScript) {
         existingScript.addEventListener("load", () => {
           if (!window.pdfjsLib) {
-            reject(new Error("Biblioteca de leitura de PDF nÃ£o ficou disponÃ­vel."));
+            reject(new Error("Biblioteca de leitura de PDF não ficou disponível."));
             return;
           }
 
@@ -613,7 +613,7 @@ async function loadPdfJs() {
       script.dataset.pdfjs = "reader";
       script.onload = () => {
         if (!window.pdfjsLib) {
-          reject(new Error("Biblioteca de leitura de PDF nÃ£o ficou disponÃ­vel."));
+          reject(new Error("Biblioteca de leitura de PDF não ficou disponível."));
           return;
         }
 
@@ -739,7 +739,7 @@ function PreviewBlock({ title, value }: { title?: string; value: unknown }) {
       </div>
       {isLarge && (
         <button className="btn btn-ghost btn-inline preview-toggle" type="button" onClick={() => setExpanded(current => !current)}>
-          {expanded ? "Recolher conteÃºdo" : "Expandir conteÃºdo"}
+          {expanded ? "Recolher conteúdo" : "Expandir conteúdo"}
         </button>
       )}
     </div>
@@ -951,7 +951,7 @@ function describeAutomaticSchedule(
     if (!intervalMinutes) {
       return {
         label: "Agendamento em intervalo",
-        detail: scheduleValue || "Intervalo nÃ£o informado",
+        detail: scheduleValue || "Intervalo não informado",
         nextAt: null as Date | null
       };
     }
@@ -975,7 +975,7 @@ function describeAutomaticSchedule(
     const nextAt = getNextCronOccurrence(scheduleValue);
     return {
       label: "Agendamento cron",
-      detail: scheduleValue || "ExpressÃ£o cron nÃ£o informada",
+      detail: scheduleValue || "Expressão cron não informada",
       nextAt
     };
   }
@@ -1006,7 +1006,7 @@ function formatTechnicalDataLabel(key: string) {
     case "_integration.errorMessage":
       return "Erro";
     case "_integration.awaitingData":
-      return "Aguardando retorno com conteÃºdo";
+      return "Aguardando retorno com conteúdo";
     case "_integration.awaitingDataMessage":
       return "Status da consulta";
     case "_integration.emptyResultRetryMinutes":
@@ -1036,7 +1036,7 @@ function formatTechnicalDataLabel(key: string) {
     case "_integration.responseRule.maxAttempts":
       return "Limite de tentativas";
     case "_integration.responseRule.nextAttemptAtUtc":
-      return "PrÃ³xima tentativa";
+      return "Próxima tentativa";
     case "_integration.mappingWarning":
       return "Aviso do mapeamento";
     case "_integration.mappingResult":
@@ -1595,7 +1595,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       return false;
     }
 
-    window.alert("VocÃª concluiu sua tarefa e nÃ£o possui permissÃ£o para executar a prÃ³xima etapa.");
+    window.alert("Você concluiu sua tarefa e não possui permissão para executar a próxima etapa.");
     router.push("/tarefas");
     return true;
   }
@@ -1608,8 +1608,8 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     setGateState(
       reason === "advance"
         ? {
-          title: "ExecuÃ§Ã£o realizada com sucesso",
-          message: "A etapa foi concluÃ­da e a prÃ³xima execuÃ§Ã£o estÃ¡ disponÃ­vel para outro responsÃ¡vel.",
+          title: "Execução realizada com sucesso",
+          message: "A etapa foi concluída e a próxima execução está disponível para outro responsável.",
           accent: "success"
         }
         : {
@@ -1757,7 +1757,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
   function getStepStateLabel(step: Instance["steps"][number]) {
     if (step.status === 2) {
-      return step.completedAt ? `ConcluÃ­da ${step.completedAt ? new Date(step.completedAt).toLocaleString("pt-BR") : ""}` : "ConcluÃ­da";
+      return step.completedAt ? `Concluída ${step.completedAt ? new Date(step.completedAt).toLocaleString("pt-BR") : ""}` : "Concluída";
     }
 
     if (step.status === 1) {
@@ -1831,9 +1831,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
         {isAwaitingData && (
           <div className="notice" style={{ marginBottom: 16 }}>
-            <strong>{ruleMode === "condition" ? "Consulta aguardando condiÃ§Ã£o da API" : "Consulta aguardando retorno com conteÃºdo"}</strong>
+            <strong>{ruleMode === "condition" ? "Consulta aguardando condição da API" : "Consulta aguardando retorno com conteúdo"}</strong>
             <div style={{ marginTop: 8 }}>
-              {awaitingDataMessage || "A API respondeu com lista vazia e o sistema continuarÃ¡ tentando automaticamente."}
+              {awaitingDataMessage || "A API respondeu com lista vazia e o sistema continuará tentando automaticamente."}
             </div>
             {(actualValue || expectedValue) && (
               <div className="section-copy" style={{ marginTop: 6 }}>
@@ -1849,7 +1849,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
             {(attemptCount || maxAttempts || nextAttemptAt) && (
               <div className="section-copy" style={{ marginTop: 6 }}>
                 {attemptCount && maxAttempts ? `Tentativa ${attemptCount} de ${maxAttempts}. ` : ""}
-                {nextAttemptAt ? `PrÃ³xima tentativa: ${nextAttemptAt}.` : ""}
+                {nextAttemptAt ? `Próxima tentativa: ${nextAttemptAt}.` : ""}
               </div>
             )}
           </div>
@@ -1857,9 +1857,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
         {isCancelledWaiting && (
           <div className="notice" style={{ marginBottom: 16 }}>
-            <strong>Consulta automÃ¡tica interrompida manualmente</strong>
+            <strong>Consulta automática interrompida manualmente</strong>
             <div style={{ marginTop: 8 }}>
-              {awaitingDataMessage || "As novas tentativas foram canceladas e esta etapa nÃ£o farÃ¡ novas consultas automaticamente."}
+              {awaitingDataMessage || "As novas tentativas foram canceladas e esta etapa não fará novas consultas automaticamente."}
             </div>
           </div>
         )}
@@ -1926,7 +1926,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
         {technicalData.length > 0 && (
           <div style={{ marginTop: 14 }}>
-            <strong>Dados tÃ©cnicos da automaÃ§Ã£o</strong>
+            <strong>Dados técnicos da automação</strong>
             <div className="data-list" style={{ marginTop: 10 }}>
               {technicalData.map(([key, value]) => (
                 <div className="data-item" key={`${step.id}-${key}`}>
@@ -1944,7 +1944,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
         {(step.integrationAttemptsTotalCount > 0 || step.integrationAttempts.length > 0) && (
           <div style={{ marginTop: 14 }}>
-            <strong>IntegraÃ§Ãµes da etapa</strong>
+            <strong>Integrações da etapa</strong>
             <div className="tablewrap integration-attempts-wrap" style={{ marginTop: 10, border: "1px solid var(--line)", borderRadius: 16 }}>
               <table className="table">
                 <thead>
@@ -2140,7 +2140,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       const matchedFields = applyReaderData(result.fields);
       const warnings = [...result.warnings];
       if (!matchedFields && Object.keys(result.fields).length > 0) {
-        warnings.push("Os dados foram lidos, mas nÃ£o combinaram com os campos configurados nesta etapa.");
+        warnings.push("Os dados foram lidos, mas não combinaram com os campos configurados nesta etapa.");
       }
 
       setReaderWarning(warnings.join(" "));
@@ -2152,7 +2152,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   async function scanCode() {
     setReaderWarning("");
     if (!navigator.mediaDevices) {
-      setReaderWarning("CÃ¢mera indisponÃ­vel. Use o coletor como teclado nos campos da etapa.");
+      setReaderWarning("Câmera indisponível. Use o coletor como teclado nos campos da etapa.");
       return;
     }
 
@@ -2172,7 +2172,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       }).BarcodeDetector;
 
       if (!Detector) {
-        setReaderWarning("Este navegador nÃ£o oferece leitura nativa. Use o coletor fÃ­sico ou preencha manualmente.");
+        setReaderWarning("Este navegador não oferece leitura nativa. Use o coletor físico ou preencha manualmente.");
         return;
       }
 
@@ -2197,7 +2197,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
       setTimeout(() => void loop(), 700);
     } catch {
-      setReaderWarning("NÃ£o foi possÃ­vel abrir a cÃ¢mera. Verifique a permissÃ£o e use HTTPS ou localhost.");
+      setReaderWarning("Não foi possível abrir a câmera. Verifique a permissão e use HTTPS ou localhost.");
     }
   }
 
@@ -2225,7 +2225,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       });
       setNotes(nextStep?.notes ?? "");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "NÃ£o foi possÃ­vel enviar o arquivo.");
+      setError(e instanceof Error ? e.message : "Não foi possível enviar o arquivo.");
     } finally {
       setUploadingFieldKey("");
     }
@@ -2249,7 +2249,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       });
       syncCurrentStepState(result, setItem, setFormData, setNotes);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "NÃ£o foi possÃ­vel salvar a etapa.");
+      setError(e instanceof Error ? e.message : "Não foi possível salvar a etapa.");
     } finally {
       setSaving(false);
     }
@@ -2265,7 +2265,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     if (issues.length > 0) {
       const uniqueFieldKeys = [...new Set(issues.map(issue => issue.fieldKey))];
       setInvalidFieldKeys(uniqueFieldKeys);
-      setError(`Preencha os campos obrigatÃ³rios antes de concluir: ${issues.map(issue => issue.message).join(", ")}.`);
+      setError(`Preencha os campos obrigatórios antes de concluir: ${issues.map(issue => issue.message).join(", ")}.`);
       focusFirstInvalidField(uniqueFieldKeys[0]);
       return;
     }
@@ -2287,7 +2287,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
         return;
       }
 
-      setError(e instanceof Error ? e.message : "NÃ£o foi possÃ­vel concluir a etapa.");
+      setError(e instanceof Error ? e.message : "Não foi possível concluir a etapa.");
     } finally {
       setAdvancing(false);
     }
@@ -2303,7 +2303,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       });
       syncCurrentStepState(result, setItem, setFormData, setNotes);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "NÃ£o foi possÃ­vel reprocessar a etapa.");
+      setError(e instanceof Error ? e.message : "Não foi possível reprocessar a etapa.");
     } finally {
       setReprocessingStepId("");
     }
@@ -2319,7 +2319,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       });
       syncCurrentStepState(result, setItem, setFormData, setNotes);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "NÃ£o foi possÃ­vel cancelar as tentativas automÃ¡ticas.");
+      setError(e instanceof Error ? e.message : "Não foi possível cancelar as tentativas automáticas.");
     } finally {
       setCancelingStepId("");
     }
@@ -2345,13 +2345,13 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       <div className="page-loading-card card">
         <LoaderCircle size={22} className="spin" />
         <strong>{gateState?.accent === "success" ? "Finalizando..." : "Concluindo etapa..."}</strong>
-        <span>{gateState?.accent === "success" ? "Aguarde enquanto retornamos para suas tarefas." : "Aguarde enquanto registramos a execuÃ§Ã£o desta tarefa."}</span>
+        <span>{gateState?.accent === "success" ? "Aguarde enquanto retornamos para suas tarefas." : "Aguarde enquanto registramos a execução desta tarefa."}</span>
       </div>
     </div>
   ) : null;
 
   if (!item && !gateState) {
-    return <div className="empty">Carregando execuÃ§Ã£o...</div>;
+    return <div className="empty">Carregando execução...</div>;
   }
 
   if (gateState && !item) {
@@ -2375,7 +2375,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           <div className="page-loading-card card">
             <LoaderCircle size={22} className="spin" />
             <strong>Concluindo etapa...</strong>
-            <span>Aguarde enquanto registramos a execuÃ§Ã£o desta tarefa.</span>
+            <span>Aguarde enquanto registramos a execução desta tarefa.</span>
           </div>
         </div>
       )}
@@ -2389,13 +2389,13 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           <h1 className="title">{buildReaderCode(currentStep, formData) || item.code}</h1>
           <p className="subtitle">Criado em {new Date(item.createdAt).toLocaleString("pt-BR")}</p>
         </div>
-        <span className={`badge ${item.status === 0 ? "inprogress" : "completed"}`}>{item.status === 0 ? "Em andamento" : "ConcluÃ­do"}</span>
+        <span className={`badge ${item.status === 0 ? "inprogress" : "completed"}`}>{item.status === 0 ? "Em andamento" : "Concluído"}</span>
       </div>
 
       <div className="detailstack">
         <section className="card">
           <div style={{ padding: "24px 24px 0" }}>
-            <h2 className="section-title">ExecuÃ§Ã£o da etapa atual</h2>
+            <h2 className="section-title">Execução da etapa atual</h2>
             {currentStep && <h1 style={{ fontSize: 36, lineHeight: 1.05, margin: "8px 0 10px", letterSpacing: "-0.04em" }}>{currentStep.name}</h1>}
             <p className="section-copy">
               {currentStep ? `Preencha os campos e conclua a etapa "${currentStep.name}".` : "Nenhuma etapa manual ativa no momento."}
@@ -2418,7 +2418,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 <div className="field span2">
                   <div className="scanbox">
                     <strong>Entrada assistida</strong>
-                    <p className="section-copy">Leia um DANFE digital ou capture o cÃ³digo pela cÃ¢mera para preencher a etapa atual.</p>
+                    <p className="section-copy">Leia um DANFE digital ou capture o código pela câmera para preencher a etapa atual.</p>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                       <label className="btn btn-secondary">
                         <Paperclip size={16} />
@@ -2427,7 +2427,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                       </label>
                       <button className="btn btn-secondary" type="button" onClick={scanCode}>
                         <Camera size={16} />
-                        Abrir cÃ¢mera
+                        Abrir câmera
                       </button>
                     </div>
                     {scanning && <video ref={video} className="camera" muted playsInline />}
@@ -2470,13 +2470,13 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                     )}
                   </div>
                   {invalidFieldSet.has(field.key) && (
-                    <small style={{ color: "var(--danger)", fontWeight: 700 }}>Campo obrigatÃ³rio.</small>
+                    <small style={{ color: "var(--danger)", fontWeight: 700 }}>Campo obrigatório.</small>
                   )}
                 </div>
               ))}
 
               <div className="field span2">
-                <label>ObservaÃ§Ãµes da etapa</label>
+                <label>Observações da etapa</label>
                 <textarea className="textarea" value={notes} onChange={event => setNotes(event.target.value)} />
               </div>
             </div>
@@ -2485,7 +2485,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           {currentStep?.isAutomatic && (
             <div style={{ margin: 24, display: "grid", gap: 12 }}>
               <div className="notice">
-                Esta etapa Ã© automÃ¡tica. Use o histÃ³rico abaixo para acompanhar a execuÃ§Ã£o sistÃªmica ou consultar detalhes da integraÃ§Ã£o.
+                Esta etapa é automática. Use o histórico abaixo para acompanhar a execução sistêmica ou consultar detalhes da integração.
               </div>
               {automaticSchedule && (
                 <div className="data-list" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
@@ -2495,8 +2495,8 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                     <div className="section-copy" style={{ marginTop: 6 }}>{automaticSchedule.detail}</div>
                   </div>
                   <div className="data-item">
-                    <small>PrÃ³xima execuÃ§Ã£o prevista</small>
-                    <strong>{automaticSchedule.nextAt ? formatScheduleDate(automaticSchedule.nextAt) : "NÃ£o foi possÃ­vel calcular"}</strong>
+                    <small>Próxima execução prevista</small>
+                    <strong>{automaticSchedule.nextAt ? formatScheduleDate(automaticSchedule.nextAt) : "Não foi possível calcular"}</strong>
                     <div className="section-copy" style={{ marginTop: 6 }}>
                       O worker verifica etapas agendadas em ciclos de aproximadamente 30 segundos.
                     </div>
@@ -2546,7 +2546,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
               <h2 className="section-title">Jornada do registro</h2>
               <p className="section-copy">Acompanhe o status, executor e os detalhes de cada etapa.</p>
             </div>
-            <div className="view-toggle" role="tablist" aria-label="Modo de visualizaÃ§Ã£o da jornada">
+            <div className="view-toggle" role="tablist" aria-label="Modo de visualização da jornada">
               <button
                 className={`view-toggle-btn ${journeyView === "diagram" ? "active" : ""}`}
                 type="button"
@@ -2554,7 +2554,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 aria-selected={journeyView === "diagram"}
                 onClick={() => setJourneyView("diagram")}
               >
-                VisÃ£o 2
+                Visão 2
               </button>
               <button
                 className={`view-toggle-btn ${journeyView === "timeline" ? "active" : ""}`}
@@ -2563,7 +2563,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 aria-selected={journeyView === "timeline"}
                 onClick={() => setJourneyView("timeline")}
               >
-                VisÃ£o 1
+                Visão 1
               </button>
             </div>
           </div>
@@ -2580,13 +2580,13 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                       {getStepStateLabel(step)}
                     </div>
                     <div className="section-copy" style={{ marginTop: 4 }}>
-                      {step.isAutomatic ? "ExecuÃ§Ã£o automÃ¡tica/sistÃªmica" : `Executado por ${step.completedByName || "usuÃ¡rio nÃ£o identificado"}`}
+                      {step.isAutomatic ? "Execução automática/sistêmica" : `Executado por ${step.completedByName || "usuário não identificado"}`}
                     </div>
                   </div>
                   <small>Etapa {step.order}</small>
                   <button className="btn btn-ghost" type="button" onClick={() => toggleStepDetails(step.id)}>
                     {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    Mais informaÃ§Ãµes
+                    Mais informações
                   </button>
                 </div>
 
@@ -2601,8 +2601,8 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 <div className="step-diagram-canvas" role="list" aria-label="Jornada do registro em diagrama">
                   {item.steps.map(step => {
                     const expanded = !!expandedSteps[step.id];
-                    const stateLabel = step.status === 2 ? "ConcluÃ­da" : step.status === 1 ? "Atual" : step.status === 3 ? "Interrompida" : "Aguardando";
-                    const actorLabel = step.isAutomatic ? "ExecuÃ§Ã£o automÃ¡tica/sistÃªmica" : `Executado por ${step.completedByName || "usuÃ¡rio nÃ£o identificado"}`;
+                    const stateLabel = step.status === 2 ? "Concluída" : step.status === 1 ? "Atual" : step.status === 3 ? "Interrompida" : "Aguardando";
+                    const actorLabel = step.isAutomatic ? "Execução automática/sistêmica" : `Executado por ${step.completedByName || "usuário não identificado"}`;
 
                     return (
                       <div key={step.id} className={`diagram-node ${step.status === 1 ? "active" : step.status === 3 ? "failed" : ""}`} role="listitem">
@@ -2615,14 +2615,14 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                           <small>{actorLabel}</small>
                           <div className="step-meta">
                             <span>Etapa {step.order}</span>
-                            {step.integrationAttemptsTotalCount > 0 && <span>IntegraÃ§Ã£o</span>}
+                            {step.integrationAttemptsTotalCount > 0 && <span>Integração</span>}
                           </div>
                         </button>
 
                         <div className="diagram-node-actions">
                           <button className="btn btn-ghost btn-inline" type="button" onClick={() => toggleJourneyDiagramDetails(step.id)}>
                             {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                            Mais informaÃ§Ãµes
+                            Mais informações
                           </button>
                         </div>
                       </div>
@@ -2639,12 +2639,12 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                       <h3>{selectedJourneyStep.name}</h3>
                       <p className="section-copy">
                         {selectedJourneyStep.status === 2
-                          ? `ConcluÃ­da ${selectedJourneyStep.completedAt ? new Date(selectedJourneyStep.completedAt).toLocaleString("pt-BR") : ""}`
+                          ? `Concluída ${selectedJourneyStep.completedAt ? new Date(selectedJourneyStep.completedAt).toLocaleString("pt-BR") : ""}`
                           : selectedJourneyStep.status === 1
-                            ? "Etapa atual em execuÃ§Ã£o."
+                            ? "Etapa atual em execução."
                             : selectedJourneyStep.status === 3
                               ? "Etapa interrompida manualmente."
-                              : "Etapa aguardando liberaÃ§Ã£o."}
+                              : "Etapa aguardando liberação."}
                       </p>
                     </div>
                     <button className="btn btn-ghost" type="button" onClick={() => toggleJourneyDiagramDetails(selectedJourneyStep.id)}>
