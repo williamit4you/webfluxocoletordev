@@ -1644,7 +1644,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       syncCurrentStepState(result, setItem, setFormData, setNotes);
       setAttemptPageByStep(Object.fromEntries(result.steps.map(step => [step.id, 1])));
       setAttemptPageSizeByStep(Object.fromEntries(result.steps.map(step => [step.id, 10])));
-      setAttemptStatusCodeFilterByStep(Object.fromEntries(result.steps.map(step => [step.id, ""])));
+      setAttemptStatusCodeFilterByStep(Object.fromEntries(result.steps.map(step => [step.id, "all"])));
       try {
         setFlowDefinition(await api<Flow>(`/flows/${result.flowDefinitionId}`));
       } catch {
@@ -1675,7 +1675,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       : current);
   }
 
-  async function loadStepAttempts(stepId: string, page: number, pageSize: number, statusCode = attemptStatusCodeFilterByStep[stepId] ?? "") {
+  async function loadStepAttempts(stepId: string, page: number, pageSize: number, statusCodeFilter: string) {
     setLoadingAttemptStepId(stepId);
     setError("");
 
@@ -1684,15 +1684,15 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
         page: String(page),
         pageSize: String(pageSize)
       });
-      if (statusCode) {
-        query.set("statusCode", statusCode);
+      if (statusCodeFilter !== "all") {
+        query.set("statusCode", statusCodeFilter);
       }
 
       const paged = await api<PagedIntegrationAttemptResult>(`/instances/${id}/steps/${stepId}/integration-attempts?${query.toString()}`);
       applyStepAttempts(stepId, paged);
       setAttemptPageByStep(current => ({ ...current, [stepId]: paged.page }));
       setAttemptPageSizeByStep(current => ({ ...current, [stepId]: paged.pageSize }));
-      setAttemptStatusCodeFilterByStep(current => ({ ...current, [stepId]: statusCode }));
+      setAttemptStatusCodeFilterByStep(current => ({ ...current, [stepId]: statusCodeFilter }));
       setExpandedAttemptIds({});
     } catch (e) {
       if (handleForbiddenRedirect(e)) {
@@ -1705,8 +1705,24 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     }
   }
 
-  function formatAttemptStatusFilterLabel(statusCode: number) {
-    return String(statusCode);
+  function formatAttemptStatusFilterLabel(statusCode?: number | null) {
+    return statusCode == null ? "Sem status" : String(statusCode);
+  }
+
+  function getAttemptStatusFilterValue(stepId: string) {
+    return attemptStatusCodeFilterByStep[stepId] ?? "all";
+  }
+
+  async function changeAttemptPageSize(stepId: string, pageSize: number) {
+    await loadStepAttempts(stepId, 1, pageSize, getAttemptStatusFilterValue(stepId));
+  }
+
+  async function changeAttemptStatusFilter(stepId: string, statusCodeFilter: string) {
+    await loadStepAttempts(stepId, 1, attemptPageSizeByStep[stepId] ?? 10, statusCodeFilter);
+  }
+
+  async function goToAttemptPage(stepId: string, page: number) {
+    await loadStepAttempts(stepId, page, attemptPageSizeByStep[stepId] ?? 10, getAttemptStatusFilterValue(stepId));
   }
 
   async function copyAttemptUrl(attemptId: string, url: string) {
@@ -1817,7 +1833,14 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
   function toggleDetailSection(stepId: string, section: "data" | "technical" | "attempts") {
     const key = `${stepId}:${section}`;
-    setDetailSections(current => ({ ...current, [key]: !current[key] }));
+    setDetailSections(current => {
+      const nextOpen = !current[key];
+      if (section === "attempts" && nextOpen) {
+        void loadStepAttempts(stepId, attemptPageByStep[stepId] ?? 1, attemptPageSizeByStep[stepId] ?? 10, getAttemptStatusFilterValue(stepId));
+      }
+
+      return { ...current, [key]: nextOpen };
+    });
   }
 
   function isDetailSectionOpen(stepId: string, section: "data" | "technical" | "attempts") {
@@ -2171,23 +2194,24 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 </div>
                 <div className="pagination-bar">
                   <div className="pagination-actions">
-                    {step.integrationAttemptStatusFilters.some(filter => filter.statusCode != null) && (
+                    {step.integrationAttemptStatusFilters.length > 0 && (
                       <label className="pagination-size-control">
                         <span>Resultado</span>
                         <select
                           className="select"
-                          value={attemptStatusCodeFilterByStep[step.id] ?? ""}
-                          onChange={event => void loadStepAttempts(step.id, 1, attemptPageSizeByStep[step.id] ?? 10, event.target.value)}
+                          value={getAttemptStatusFilterValue(step.id)}
+                          onChange={event => void changeAttemptStatusFilter(step.id, event.target.value)}
                           disabled={loadingAttemptStepId === step.id}
                         >
-                          <option value="">Todos</option>
-                          {step.integrationAttemptStatusFilters
-                            .filter(filter => filter.statusCode != null)
-                            .map(filter => (
-                              <option key={`${step.id}-status-${filter.statusCode}`} value={String(filter.statusCode)}>
-                                {formatAttemptStatusFilterLabel(filter.statusCode!)} ({filter.count})
+                          <option value="all">Todos</option>
+                          {step.integrationAttemptStatusFilters.map(filter => {
+                            const optionValue = filter.statusCode == null ? "none" : String(filter.statusCode);
+                            return (
+                              <option key={`${step.id}-status-${optionValue}`} value={optionValue}>
+                                {formatAttemptStatusFilterLabel(filter.statusCode)} ({filter.count})
                               </option>
-                            ))}
+                            );
+                          })}
                         </select>
                       </label>
                     )}
@@ -2205,7 +2229,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                         <select
                           className="select"
                           value={attemptPageSizeByStep[step.id] ?? 10}
-                          onChange={event => void loadStepAttempts(step.id, 1, Number(event.target.value))}
+                          onChange={event => void changeAttemptPageSize(step.id, Number(event.target.value))}
                           disabled={loadingAttemptStepId === step.id}
                         >
                           <option value={10}>10</option>
@@ -2219,7 +2243,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                       className="btn btn-secondary"
                       type="button"
                       disabled={(attemptPageByStep[step.id] ?? 1) <= 1 || loadingAttemptStepId === step.id}
-                      onClick={() => void loadStepAttempts(step.id, (attemptPageByStep[step.id] ?? 1) - 1, attemptPageSizeByStep[step.id] ?? 10)}
+                      onClick={() => void goToAttemptPage(step.id, (attemptPageByStep[step.id] ?? 1) - 1)}
                     >
                       Anterior
                     </button>
@@ -2230,7 +2254,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                       className="btn btn-secondary"
                       type="button"
                       disabled={(attemptPageByStep[step.id] ?? 1) >= Math.max(1, Math.ceil(step.integrationAttemptsTotalCount / (attemptPageSizeByStep[step.id] ?? 10))) || loadingAttemptStepId === step.id}
-                      onClick={() => void loadStepAttempts(step.id, (attemptPageByStep[step.id] ?? 1) + 1, attemptPageSizeByStep[step.id] ?? 10)}
+                      onClick={() => void goToAttemptPage(step.id, (attemptPageByStep[step.id] ?? 1) + 1)}
                     >
                       Proxima
                     </button>
