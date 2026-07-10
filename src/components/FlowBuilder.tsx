@@ -939,6 +939,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
   const [copiedReference, setCopiedReference] = useState("");
   const [dragStepIndex, setDragStepIndex] = useState<number | null>(null);
   const [dropStepIndex, setDropStepIndex] = useState<number | null>(null);
+  const [expandedListStepIndex, setExpandedListStepIndex] = useState<number | null>(0);
   const [openSections, setOpenSections] = useState<BuilderSectionState>({
     flowBasics: false,
     flowUsers: false,
@@ -1568,6 +1569,489 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
     }
   }
 
+  function renderStepEditor(step: Step, stepIndex: number, inline = false) {
+    return <div className={`step-editor card${inline ? " step-editor-inline" : ""}`}>
+      <div className="step-editor-header">
+        <div>
+          <span className="eyebrow">Etapa {stepIndex + 1}</span>
+          <h3>{step.name || "Configuracao da etapa"}</h3>
+        </div>
+        <Workflow size={20} />
+      </div>
+
+      <AccordionSection
+        title="Cadastro da etapa"
+        description="Defina nome, tipo, responsáveis e contexto geral desta etapa."
+        open={openSections.stepBasics}
+        onToggle={() => toggleSection("stepBasics")}
+      >
+        <div className="formgrid">
+          <div className="field">
+            <label>Nome da etapa *</label>
+            <input className="input" value={step.name} onChange={e => updateStep(stepIndex, { name: e.target.value })} disabled={!isDraft} />
+          </div>
+          <div className="field">
+            <label>Tipo de entrada</label>
+            <select className="select" value={step.type} onChange={e => updateStep(stepIndex, { type: Number(e.target.value), apiConfig: createApiConfig() })} disabled={!isDraft}>
+              {stepTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </div>
+          <div className="field span2">
+            <label>Usuários da etapa</label>
+            <input className="input" placeholder="Buscar usuário na etapa..." value={stepUserFilter} onChange={e => setStepUserFilter(e.target.value)} disabled={!isDraft} />
+            <div style={{ maxHeight: 220, overflow: "auto", border: "1px solid var(--line)", borderRadius: 12, padding: 10, display: "grid", gap: 8 }}>
+              <label className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: step.assignedUserIds.length === 0 ? "#eef7f2" : "#fff" }}>
+                <input type="checkbox" checked={step.assignedUserIds.length === 0} onChange={() => updateStep(stepIndex, { assignedUserIds: [] })} disabled={!isDraft} />
+                Qualquer usuário com acesso ao fluxo
+              </label>
+              {filteredStepUsers.map(user => <label key={user.id} className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: step.assignedUserIds.includes(user.id) ? "#eef7f2" : "#fff" }}>
+                <input type="checkbox" checked={step.assignedUserIds.includes(user.id)} onChange={() => toggleStepUser(user.id)} disabled={!isDraft} />
+                {user.name} <small style={{ color: "var(--muted)" }}>{user.email}</small>
+              </label>)}
+              {filteredStepUsers.length === 0 && <div className="empty compact">Nenhum usuário encontrado.</div>}
+            </div>
+          </div>
+          <div className="field span2">
+            <label>Descrição</label>
+            <textarea className="textarea" value={step.description ?? ""} onChange={e => updateStep(stepIndex, { description: e.target.value })} disabled={!isDraft} />
+          </div>
+        </div>
+      </AccordionSection>
+
+      <AccordionSection
+        title="Campos de registro"
+        description="Esses campos aparecem quando a etapa precisa capturar dados."
+        open={openSections.fields}
+        onToggle={() => toggleSection("fields")}
+        actions={<div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => applyDanfeTemplate(stepIndex)}>
+            <Copy size={16} />
+            Template DANFE
+          </button>
+          <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => updateStep(stepIndex, { fields: [...step.fields, createField()] })}>
+            <Plus size={16} />
+            Adicionar campo
+          </button>
+        </div>}
+      >
+        <div className="builder">
+          {step.fields.length === 0 && <div className="empty compact">Nenhum campo cadastrado nesta etapa.</div>}
+          {step.fields.map((field, fieldIndex) =>
+            <div className="field-block" key={`${field.id ?? "new"}-${fieldIndex}`}>
+              <div className="builder-row builder-row-field">
+                <input
+                  className="input"
+                  placeholder="Rotulo"
+                  value={field.label}
+                  onChange={e => updateField(stepIndex, fieldIndex, {
+                    label: e.target.value,
+                    key: buildAutoFieldKey(field.label, field.key, e.target.value)
+                  })}
+                  disabled={!isDraft}
+                />
+                <input className="input" placeholder="chave_do_campo" value={field.key} onChange={e => updateField(stepIndex, fieldIndex, { key: slugify(e.target.value) })} disabled={!isDraft} />
+                <select className="select" value={field.type} onChange={e => updateField(stepIndex, fieldIndex, {
+                  type: Number(e.target.value),
+                  mask: fieldSupportsMask(Number(e.target.value)) ? field.mask ?? "" : "",
+                  options: fieldSupportsOptions(Number(e.target.value)) ? (field.options.length ? field.options : [createOption(Number(e.target.value))]) : []
+                })} disabled={!isDraft}>
+                  {fieldTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+                <select className="select" value={field.mask ?? ""} onChange={e => updateField(stepIndex, fieldIndex, { mask: e.target.value || "" })} disabled={!isDraft || !fieldSupportsMask(field.type)}>
+                  {maskOptions.map(option => <option key={option.value || "empty"} value={option.value}>{option.label}</option>)}
+                </select>
+                <label className="toggle-line compact">
+                  <input type="checkbox" checked={field.required} onChange={e => updateField(stepIndex, fieldIndex, { required: e.target.checked })} disabled={!isDraft} />
+                  Obrigatorio
+                </label>
+                <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateStep(stepIndex, { fields: step.fields.filter((_, currentFieldIndex) => currentFieldIndex !== fieldIndex) })}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
+
+              {fieldSupportsOptions(field.type) && <div className="options-box">
+                <div className="section-header">
+                  <div>
+                    <h4>{field.type === 8 ? "Opcoes do radio" : "Campos da lista"}</h4>
+                    <p className="section-copy">{field.type === 8 ? "Cadastre as opcoes exibidas como selecao unica em botoes." : "A lista pode usar os mesmos tipos do campo principal, exceto outra lista aninhada."}</p>
+                  </div>
+                  <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => updateField(stepIndex, fieldIndex, { options: [...field.options, createOption(field.type)] })}>
+                    <Plus size={14} />
+                    {field.type === 8 ? "Nova opcao" : "Novo campo"}
+                  </button>
+                </div>
+                {field.options.map((option, optionIndex) => field.type === 8
+                  ? <div className="builder-row option-row" key={`${option.id ?? "new"}-${optionIndex}`}>
+                    <input className="input" placeholder="Nome da opcao" value={option.label} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { label: e.target.value })} disabled={!isDraft} />
+                    <input className="input" placeholder="Valor enviado" value={option.value} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { value: e.target.value })} disabled={!isDraft} />
+                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateField(stepIndex, fieldIndex, { options: field.options.filter((_, currentOptionIndex) => currentOptionIndex !== optionIndex) })}>
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                  : <div className="builder-row builder-row-field" key={`${option.id ?? "new"}-${optionIndex}`}>
+                    <input
+                      className="input"
+                      placeholder="Rotulo"
+                      value={option.label}
+                      onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, {
+                        label: e.target.value,
+                        key: buildAutoFieldKey(option.label, option.key ?? option.value ?? "", e.target.value),
+                        value: buildAutoFieldKey(option.label, option.key ?? option.value ?? "", e.target.value)
+                      })}
+                      disabled={!isDraft}
+                    />
+                    <input className="input" placeholder="chave_do_campo" value={option.key ?? option.value ?? ""} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { key: slugify(e.target.value), value: slugify(e.target.value) })} disabled={!isDraft} />
+                    <select className="select" value={option.type ?? ""} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, {
+                      type: e.target.value ? Number(e.target.value) : null,
+                      mask: e.target.value && fieldSupportsMask(Number(e.target.value)) ? option.mask ?? "" : ""
+                    })} disabled={!isDraft}>
+                      <option value="">Tipo</option>
+                      {listFieldTypeOptions.map(typeOption => <option key={typeOption.value} value={typeOption.value}>{typeOption.label}</option>)}
+                    </select>
+                    <select className="select" value={option.mask ?? ""} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { mask: e.target.value || "" })} disabled={!isDraft || !fieldSupportsMask(option.type ?? -1)}>
+                      {maskOptions.map(maskOption => <option key={maskOption.value || "empty"} value={maskOption.value}>{maskOption.label}</option>)}
+                    </select>
+                    <label className="toggle-line compact">
+                      <input type="checkbox" checked={option.required ?? false} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { required: e.target.checked })} disabled={!isDraft} />
+                      Obrigatorio
+                    </label>
+                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateField(stepIndex, fieldIndex, { options: field.options.filter((_, currentOptionIndex) => currentOptionIndex !== optionIndex) })}>
+                      <Trash2 size={15} />
+                    </button>
+                  </div>)}
+              </div>}
+            </div>)}
+        </div>
+      </AccordionSection>
+
+      {step.type === 3 && <AccordionSection
+        title="Agendamento de inicio"
+        description="Configure quando novas execucoes deste fluxo devem ser iniciadas automaticamente."
+        open={openSections.autoSchedule}
+        onToggle={() => toggleSection("autoSchedule")}
+      >
+        <div className="formgrid">
+          <ScheduleEditor config={step.apiConfig} onChange={patch => updateApiConfig(stepIndex, patch)} isDraft={isDraft} stepType={step.type} />
+        </div>
+      </AccordionSection>}
+
+      {typeNeedsApi(step.type) && <AccordionSection
+        title="Integracao da etapa"
+        description="Configure envio, consulta ou monitoramento por API na propria etapa."
+        open={openSections.integration}
+        onToggle={() => toggleSection("integration")}
+      >
+        <div className="formgrid">
+          <div className="field">
+            <label>URL</label>
+            <input className="input" placeholder="https://api.exemplo.com/recurso" value={step.apiConfig?.url ?? ""} onChange={e => updateApiConfig(stepIndex, { url: e.target.value })} disabled={!isDraft} />
+          </div>
+          <div className="field">
+            <label>Metodo</label>
+            <select className="select" value={step.apiConfig?.method ?? (step.type === 4 ? "POST" : "GET")} onChange={e => updateApiConfig(stepIndex, { method: e.target.value })} disabled={!isDraft}>
+              {step.type === 4 && <>
+                <option value="POST">POST</option>
+                <option value="PUT">PUT</option>
+              </>}
+              {step.type !== 4 && <option value="GET">GET</option>}
+            </select>
+          </div>
+          <div className="field">
+            <label>Token</label>
+            <select className="select" value={step.apiConfig?.tokenName ?? ""} onChange={e => updateApiConfig(stepIndex, { tokenName: e.target.value || undefined })} disabled={!isDraft}>
+              <option value="">Sem autenticacao</option>
+              {tokens.map((token, index) => <option key={`${token.id ?? "new"}-${index}`} value={token.name}>{token.name || `Token ${index + 1}`}</option>)}
+            </select>
+          </div>
+          <div className="field span2">
+            <label>Headers adicionais</label>
+            <div className="section-copy" style={{ marginBottom: 10 }}>
+              Use para enviar cabecalhos como <code>Riosoft-Token</code>, <code>LocalConnection</code>, <code>X-Requested-With</code> e <code>Accept</code>. <code>Content-Type</code> ja vai como JSON automaticamente.
+            </div>
+            <div className="builder">
+              {currentHeaders.length === 0 && <div className="empty compact">Nenhum header adicional nesta etapa.</div>}
+              {currentHeaders.map((header, headerIndex) =>
+                <div className="field-block" key={`request-header-${headerIndex}`}>
+                  <div className="builder-row" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <input className="input" style={{ minWidth: 220 }} placeholder="Nome do header" value={header.name} onChange={e => updateRequestHeader(headerIndex, { name: e.target.value })} disabled={!isDraft} />
+                    <input className="input" style={{ minWidth: 280 }} placeholder="Valor fixo ou {{placeholder}}" value={header.value} onChange={e => updateRequestHeader(headerIndex, { value: e.target.value })} disabled={!isDraft} />
+                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => removeRequestHeader(headerIndex)}>
+                      <Trash2 size={15} />
+                      Remover
+                    </button>
+                  </div>
+                </div>)}
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={addRequestHeader}>
+                <Plus size={14} />
+                Adicionar header
+              </button>
+            </div>
+          </div>
+          {step.type === 5 && <div className="field span2">
+            <label>Template da consulta</label>
+            <input className="input" placeholder="Ex.: ?id={{chaveAcesso}}" value={step.apiConfig?.queryTemplate ?? ""} onChange={e => updateApiConfig(stepIndex, { queryTemplate: e.target.value })} disabled={!isDraft} />
+          </div>}
+          <div className="field span2">
+            <label className="toggle-line">
+              <input type="checkbox" checked={step.apiConfig?.validateTls ?? true} onChange={e => updateApiConfig(stepIndex, { validateTls: e.target.checked })} disabled={!isDraft} />
+              Validar certificado TLS/HTTPS
+            </label>
+          </div>
+        </div>
+
+        {(step.type === 2 || step.type === 5) && <div className="formgrid" style={{ marginTop: 16 }}>
+          <ScheduleEditor config={step.apiConfig} onChange={patch => updateApiConfig(stepIndex, patch)} isDraft={isDraft} stepType={step.type} />
+        </div>}
+
+        {(step.type === 4 || step.type === 5) && <AccordionSection
+          title="Regra de retorno"
+          description="Defina o que a resposta precisa ter para a etapa avancar, aguardar nova tentativa ou falhar."
+          open={openSections.responseRule}
+          onToggle={() => toggleSection("responseRule")}
+        >
+          <ResponseRuleEditor config={step.apiConfig} stepType={step.type} isDraft={isDraft} onChange={patch => updateApiConfig(stepIndex, patch)} />
+        </AccordionSection>}
+
+        <AccordionSection
+          title="Campos disponiveis para integracao"
+          description="Reaproveite dados das etapas anteriores para montar URL, consulta ou identificar o registro enviado para a API."
+          open={openSections.integrationFields}
+          onToggle={() => toggleSection("integrationFields")}
+        >
+          {availableIntegrationFields.length === 0 && <div className="empty compact">Cadastre campos em etapas anteriores para reutiliza-los nesta integracao.</div>}
+          {availableIntegrationFields.length > 0 && <div className="builder">
+            {availableIntegrationFields.map(reference =>
+              <div className="field-block" key={`${reference.stepIndex}-${reference.key}`}>
+                <div className="builder-row" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ minWidth: 220 }}>
+                    <strong>{reference.label}</strong>
+                    <div className="section-copy" style={{ marginTop: 4 }}>Etapa {reference.stepIndex + 1} - {reference.stepName}</div>
+                  </div>
+                  <code style={{ padding: "8px 10px", borderRadius: 10, background: "#f3f7f5", color: "#176b51", fontSize: 13 }}>{reference.variable}</code>
+                  <button className="btn btn-ghost" type="button" onClick={() => copyReference(reference.variable)}><Copy size={15} />{copiedReference === reference.variable ? "Copiado" : "Copiar"}</button>
+                  <button className="btn btn-ghost" type="button" onClick={() => insertReferenceIntoTestPayload(reference)}>Inserir no teste</button>
+                  <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => insertIntoApiConfig("url", reference.variable)}>Inserir na URL</button>
+                  {step.type === 5 && <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => insertIntoApiConfig("queryTemplate", reference.variable)}>Inserir na consulta</button>}
+                </div>
+              </div>)}
+          </div>}
+
+          {step.type === 4 && availableIntegrationFields.length > 0 && <div className="notice" style={{ marginTop: 14 }}>
+            <strong>Campos enviados no body</strong>
+            <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={selectAllSendFields}>
+                Selecionar todos
+              </button>
+              <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={clearSendFields}>
+                Limpar selecao
+              </button>
+            </div>
+            <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {availableIntegrationFields.map(reference =>
+                <label key={`payload-${reference.stepIndex}-${reference.key}`} className="toggle-line compact" style={{ padding: "8px 12px", border: "1px solid #d7e3dc", borderRadius: 999, background: "#fff" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedSendFieldKeys.length === 0 ? true : selectedSendFieldKeys.includes(reference.key)}
+                    onChange={() => toggleSendFieldKey(reference.key)}
+                    disabled={!isDraft}
+                  />
+                  {reference.label}
+                </label>)}
+            </div>
+            <div className="section-copy" style={{ marginTop: 8 }}>
+              Se nenhum campo for marcado manualmente, o sistema envia todos os campos disponiveis ate esta etapa.
+            </div>
+            {selectedSendFieldKeys.length > 0 && <div style={{ marginTop: 14 }}>
+              <strong>Ordem do payload</strong>
+              <div className="builder" style={{ marginTop: 10 }}>
+                {orderedSelectedSendFields.map((reference, index) =>
+                  <div className="field-block" key={`ordered-payload-${reference.key}`}>
+                    <div className="builder-row" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <span className="step-chip">{index + 1}</span>
+                      <div style={{ minWidth: 220 }}>
+                        <strong>{reference.label}</strong>
+                        <div className="section-copy" style={{ marginTop: 4 }}>{reference.variable}</div>
+                      </div>
+                      <button className="btn btn-ghost" type="button" disabled={!isDraft || index === 0} onClick={() => moveSendField(reference.key, "up")}>
+                        <ArrowUp size={15} />
+                        Subir
+                      </button>
+                      <button className="btn btn-ghost" type="button" disabled={!isDraft || index === orderedSelectedSendFields.length - 1} onClick={() => moveSendField(reference.key, "down")}>
+                        <ArrowDown size={15} />
+                        Descer
+                      </button>
+                    </div>
+                  </div>)}
+              </div>
+            </div>}
+          </div>}
+
+          {step.type === 4 && availableIntegrationFields.length > 0 && <div className="notice" style={{ marginTop: 14 }}>
+            <strong>API envio:</strong> esta etapa ja envia automaticamente no corpo JSON os dados capturados ate aqui, incluindo campos da etapa inicial como numero da nota fiscal.
+            <pre style={{ whiteSpace: "pre-wrap", marginTop: 10 }}>{payloadPreview}</pre>
+          </div>}
+
+          {step.type === 4 && <AccordionSection
+            title="Body customizado"
+            description='Opcionalmente, monte o corpo com nomes de propriedades diferentes dos campos internos. Ex.: numeroNota recebe {{notafiscal}}.'
+            open={openSections.bodyMapping}
+            onToggle={() => toggleSection("bodyMapping")}
+            actions={<button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={addBodyMapping}>
+              <Plus size={14} />
+              Adicionar mapeamento
+            </button>}
+          >
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+              <button className="btn btn-ghost" type="button" disabled={!isDraft || availableIntegrationFields.length === 0} onClick={buildBodyTemplateFromSelectedFields}>
+                Gerar template JSON
+              </button>
+              <button className="btn btn-ghost" type="button" disabled={!isDraft || availableIntegrationFields.length === 0} onClick={buildBodyMappingsFromSelectedFields}>
+                Gerar pelos campos selecionados
+              </button>
+            </div>
+
+            <div className="field" style={{ marginTop: 14 }}>
+              <label>Template JSON livre</label>
+              <textarea
+                className="textarea"
+                placeholder={"{\n  \"FormName\": \"movEstq\",\n  \"Filter\": \"Numero Like '%{{numero}}%'\"\n}"}
+                value={currentBodyTemplate}
+                onChange={e => updateApiConfig(stepIndex, { bodyTemplate: e.target.value })}
+                disabled={!isDraft}
+                style={{ minHeight: 220, fontFamily: "monospace" }}
+              />
+              <div className="section-copy" style={{ marginTop: 8 }}>
+                Se preencher aqui, este JSON tem prioridade sobre o mapeamento abaixo. Voce pode misturar valores fixos com placeholders de etapas anteriores.
+              </div>
+            </div>
+
+            {currentBodyMappings.length === 0 && !currentBodyTemplate.trim() && <div className="empty compact">Sem body customizado. Nesse caso, o sistema usa os campos selecionados acima.</div>}
+
+            {currentBodyMappings.length > 0 && <div className="builder">
+              {currentBodyMappings.map((mapping, mappingIndex) =>
+                <div className="field-block" key={`body-mapping-${mappingIndex}`}>
+                  <div className="builder-row" style={{ alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                    <input
+                      className="input"
+                      style={{ minWidth: 200 }}
+                      placeholder="nomePropriedade ou cliente.documento"
+                      value={mapping.targetKey}
+                      onChange={e => updateBodyMapping(mappingIndex, { targetKey: normalizeBodyTargetKey(e.target.value) })}
+                      disabled={!isDraft}
+                    />
+                    <select
+                      className="select"
+                      style={{ minWidth: 260 }}
+                      value={mapping.sourceReference}
+                      onChange={e => updateBodyMapping(mappingIndex, { sourceReference: e.target.value })}
+                      disabled={!isDraft}
+                    >
+                      <option value="">Selecione um campo</option>
+                      {availableIntegrationFields.map(reference => <option key={`body-source-${reference.key}`} value={reference.variable}>{reference.label} - {reference.variable}</option>)}
+                    </select>
+                    <button className="btn btn-ghost" type="button" disabled={!isDraft || mappingIndex === 0} onClick={() => moveBodyMapping(mappingIndex, "up")}>
+                      <ArrowUp size={15} />
+                      Subir
+                    </button>
+                    <button className="btn btn-ghost" type="button" disabled={!isDraft || mappingIndex === currentBodyMappings.length - 1} onClick={() => moveBodyMapping(mappingIndex, "down")}>
+                      <ArrowDown size={15} />
+                      Descer
+                    </button>
+                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => duplicateBodyMapping(mappingIndex)}>
+                      Duplicar
+                    </button>
+                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => removeBodyMapping(mappingIndex)}>
+                      <Trash2 size={15} />
+                      Remover
+                    </button>
+                  </div>
+                </div>)}
+            </div>}
+
+            {currentBodyMappings.length > 0 && <div className="notice" style={{ marginTop: 14 }}>
+              <strong>Preview do body customizado</strong>
+              <pre style={{ whiteSpace: "pre-wrap", marginTop: 10 }}>{customBodyPreview}</pre>
+              <div className="section-copy" style={{ marginTop: 8 }}>
+                Dica: use ponto no nome da propriedade para criar objetos aninhados, como <code>cliente.documento</code> ou <code>nota.numero</code>.
+              </div>
+            </div>}
+          </AccordionSection>}
+
+          {(step.type === 4 || step.type === 5) && step.fields.length > 0 && <AccordionSection
+            title="Mapeamento da resposta da API"
+            description="Defina qual propriedade do JSON retornado preenche cada campo desta etapa. Exemplo ViaCEP: logradouro, bairro, localidade, uf."
+            open={openSections.responseMapping}
+            onToggle={() => toggleSection("responseMapping")}
+            actions={<button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={fillResponseMappingsByFieldKey}>
+              Preencher pelo nome do campo
+            </button>}
+          >
+            <div className="builder">
+              {step.fields.map((field, fieldIndex) =>
+                <div className="field-block" key={`response-map-${field.id ?? "new"}-${fieldIndex}`}>
+                  <div className="response-mapping-row">
+                    <div className="response-mapping-meta">
+                      <strong>{field.label || `Campo ${fieldIndex + 1}`}</strong>
+                      <div className="section-copy response-mapping-copy">
+                        Chave interna: {field.key || "defina a chave do campo"}
+                      </div>
+                    </div>
+                    <div className="response-mapping-input">
+                      <label className="response-mapping-label">Resposta da API</label>
+                      <input
+                        className="input"
+                        placeholder="Ex.: logradouro ou data.endereco.uf"
+                        value={field.key ? getResponseMappingValue(field.key) : ""}
+                        onChange={e => field.key && updateResponseMapping(field.key, e.target.value)}
+                        disabled={!isDraft || !field.key}
+                      />
+                    </div>
+                    {field.key && <button className="btn btn-ghost response-mapping-action" type="button" disabled={!isDraft} onClick={() => updateResponseMapping(field.key, field.key)}>
+                      Usar mesma chave
+                    </button>}
+                  </div>
+                </div>)}
+            </div>
+          </AccordionSection>}
+        </AccordionSection>
+
+        <AccordionSection
+          title="Teste controlado"
+          description="Salve o rascunho e teste com um JSON de exemplo sem avancar execucoes reais."
+          open={openSections.test}
+          onToggle={() => toggleSection("test")}
+          actions={<button className="btn btn-secondary" type="button" disabled={!flowId || !step.id || testingStepId === step.id} onClick={testIntegration}>
+            <Send size={15} />
+            {testingStepId === step.id ? "Testando..." : "Testar integracao"}
+          </button>}
+        >
+          <div className="field">
+            <label>JSON de exemplo</label>
+            <textarea className="textarea" value={testPayload} onChange={e => setTestPayload(e.target.value)} />
+          </div>
+          {testResult && <div className={testResult.success ? "notice" : "error"} style={{ marginTop: 12 }}>
+            <strong>{testResult.success ? "Integracao concluida" : "Integracao falhou"}</strong>
+            <div style={{ marginTop: 6 }}>Metodo: {testResult.method} | Status: {testResult.statusCode ?? "sem resposta"} | Tempo: {testResult.durationMs} ms</div>
+            <div style={{ marginTop: 6, wordBreak: "break-word" }}>URL: {testResult.url}</div>
+            {testResult.responsePreview && <pre style={{ whiteSpace: "pre-wrap", marginTop: 10 }}>{testResult.responsePreview}</pre>}
+            {testResult.mappedFields && Object.keys(testResult.mappedFields).length > 0 && <div style={{ marginTop: 10 }}>
+              <strong>Campos mapeados</strong>
+              <pre style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{JSON.stringify(testResult.mappedFields, null, 2)}</pre>
+            </div>}
+            {testResult.responseRuleEvaluation && <div style={{ marginTop: 10 }}>
+              <strong>Regra de retorno</strong>
+              <div className="section-copy" style={{ marginTop: 6 }}>{testResult.responseRuleEvaluation.reason}</div>
+              <pre style={{ whiteSpace: "pre-wrap", marginTop: 8 }}>{JSON.stringify(testResult.responseRuleEvaluation, null, 2)}</pre>
+            </div>}
+            {testResult.errorMessage && <div style={{ marginTop: 8 }}>{testResult.errorMessage}</div>}
+          </div>}
+        </AccordionSection>
+      </AccordionSection>}
+    </div>;
+  }
+
   if (loading) {
     return <div className="empty">Carregando estrutura do fluxo...</div>;
   }
@@ -1768,12 +2252,12 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
           </button>
         </div>}
       >
-        <div className={`step-board ${builderView === "diagram" ? "step-board-diagram" : ""}`}>
+        <div className={`step-board ${builderView === "diagram" ? "step-board-diagram" : "step-board-list"}`}>
         {builderView === "list"
           ? <div className="step-list">
             {steps.map((step, index) =>
               <article
-                className={`step-card ${editingStep === index ? "active" : ""} ${dragStepIndex === index ? "dragging" : ""} ${dropStepIndex === index ? "drop-target" : ""}`}
+                className={`step-list-accordion ${editingStep === index ? "active" : ""} ${dragStepIndex === index ? "dragging" : ""} ${dropStepIndex === index ? "drop-target" : ""}`}
                 key={`${step.id ?? "new"}-${index}`}
                 draggable={isDraft}
                 onDragStart={() => handleStepDragStart(index)}
@@ -1781,8 +2265,31 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                 onDrop={() => handleStepDrop(index)}
                 onDragEnd={handleStepDragEnd}
               >
-                <div className="step-card-top">
-                  <span className="step-chip">{index + 1}</span>
+                <div className="step-list-accordion-head">
+                  <button
+                    className="step-list-accordion-trigger"
+                    type="button"
+                    onClick={() => {
+                      setEditingStep(index);
+                      setExpandedListStepIndex(current => current === index ? null : index);
+                    }}
+                    aria-expanded={expandedListStepIndex === index}
+                  >
+                    <div className="step-list-accordion-main">
+                      <span className="step-chip">{index + 1}</span>
+                      <div>
+                        <strong>{step.name || `Etapa ${index + 1}`}</strong>
+                        <small>{stepTypeOptions.find(option => option.value === step.type)?.label}</small>
+                        <div className="step-meta">
+                          <span>{step.fields.length} campo(s)</span>
+                          {typeNeedsApi(step.type) && <span>Integracao</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="accordion-icon" aria-hidden="true">
+                      <ChevronDown size={16} style={{ transform: expandedListStepIndex === index ? "rotate(180deg)" : "rotate(-90deg)", transition: "transform .2s ease" }} />
+                    </span>
+                  </button>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button className="icon-btn" type="button" disabled={!isDraft || index === 0} onClick={() => moveStep(index, "left")} aria-label={`Mover etapa ${index + 1} para cima`}>
                       <ArrowUp size={16} />
@@ -1790,21 +2297,21 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                     <button className="icon-btn" type="button" disabled={!isDraft || index === steps.length - 1} onClick={() => moveStep(index, "right")} aria-label={`Mover etapa ${index + 1} para baixo`}>
                       <ArrowDown size={16} />
                     </button>
-                    <button className="icon-btn" type="button" onClick={() => setEditingStep(index)}>
+                    <button className="icon-btn" type="button" onClick={() => {
+                      setEditingStep(index);
+                      setExpandedListStepIndex(index);
+                    }}>
                       <PencilLine size={16} />
                     </button>
                   </div>
                 </div>
-                <strong>{step.name || `Etapa ${index + 1}`}</strong>
-                <small>{stepTypeOptions.find(option => option.value === step.type)?.label}</small>
-                <div className="step-meta">
-                  <span>{step.fields.length} campo(s)</span>
-                  {typeNeedsApi(step.type) && <span>Integracao</span>}
+                <div className="step-list-accordion-actions">
+                  <button className="btn btn-ghost btn-inline" type="button" disabled={!isDraft} onClick={() => removeStep(index)}>
+                    <Trash2 size={15} />
+                    Excluir
+                  </button>
                 </div>
-                <button className="btn btn-ghost btn-inline" type="button" disabled={!isDraft} onClick={() => removeStep(index)}>
-                  <Trash2 size={15} />
-                  Excluir
-                </button>
+                {expandedListStepIndex === index && editingStep === index && renderStepEditor(step, index, true)}
               </article>)}
           </div>
           : <div className="step-diagram card">
@@ -1858,7 +2365,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
             </div>
           </div>}
 
-        {currentStep && <div className="step-editor card">
+        {builderView === "diagram" && currentStep && <div className="step-editor card">
           <div className="step-editor-header">
             <div>
               <span className="eyebrow">Etapa {editingStep + 1}</span>
