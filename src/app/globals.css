@@ -7,12 +7,14 @@
 @media(max-width:1200px){.bucket-row{grid-template-columns:1fr}.bucket-actions{justify-content:flex-start}}
 @media(max-width:760px){.bucket-fields{grid-template-columns:1fr}.bucket-actions{flex-direction:column;align-items:flex-start}.bucket-remove{padding-inline:0}}
 .preview-block{margin-top:8px}
+.preview-block-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .preview-block-title{margin:8px 0 6px}
 .preview-shell{border:1px solid #dbe5df;border-radius:12px;background:#f8fbf9;overflow:hidden}
 .preview-content{margin:0;padding:12px 14px;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.55;overflow:auto}
 .preview-content.collapsed{max-height:220px}
 .preview-content.expanded{max-height:640px}
 .preview-toggle{margin-top:6px;padding-left:0}
+.preview-copy,.integration-attempts-url-copy{margin-top:0;color:var(--brand2)}
 .journey-diagram{display:grid;gap:22px}
 .step-diagram-scroll{overflow-x:auto;padding-bottom:6px}
 .step-diagram-canvas{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(256px,256px);gap:56px;align-items:start;padding:8px 4px 12px}
@@ -55,7 +57,6 @@
 .integration-attempts-url-cell{min-width:260px;max-width:360px}
 .integration-attempts-url-shell{display:grid;gap:4px}
 .integration-attempts-url-shell strong{word-break:break-word;font-size:13px}
-.integration-attempts-url-link{color:var(--brand2);font-size:12px;text-decoration:underline}
 .integration-attempts-summary-cell{min-width:240px;max-width:360px}
 .integration-attempts-summary-type{display:inline-flex;margin-bottom:6px;padding:4px 8px;border-radius:999px;background:#f0f4f2;color:#4f5f59;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
 .integration-attempts-summary-text{color:#41504a;font-size:13px;line-height:1.45;word-break:break-word}
@@ -73,6 +74,8 @@
 .pagination-bar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px;flex-wrap:wrap}
 .pagination-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .pagination-page{font-size:13px;color:var(--muted);font-weight:600}
+.pagination-size-control{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px;font-weight:600}
+.pagination-size-control .select{width:88px;min-width:88px}
 .page-loading-overlay{position:fixed;inset:0;background:rgba(244,247,245,.72);backdrop-filter:blur(3px);display:grid;place-items:center;z-index:40}
 .page-loading-card{min-width:280px;padding:22px 24px;display:grid;justify-items:center;gap:8px;text-align:center}
 .page-loading-card span{font-size:13px;color:var(--muted)}
