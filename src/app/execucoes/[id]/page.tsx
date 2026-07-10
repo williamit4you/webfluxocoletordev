@@ -750,6 +750,13 @@ function getAutomaticStepTechnicalData(step: Instance["steps"][number]) {
   return Object.entries(step.data).filter(([key]) => key.startsWith("_integration."));
 }
 
+function isTechnicalPreviewField(key: string) {
+  return key === "_integration.responsePreview"
+    || key === "_integration.requestHeaders"
+    || key === "_integration.requestBody"
+    || key === "_integration.mappingResult";
+}
+
 function formatIntegrationAttemptStatus(stepAttempt: Instance["steps"][number]["integrationAttempts"][number]) {
   return `${stepAttempt.success ? "Sucesso" : "Falha"} - ${stepAttempt.responseStatusCode ?? "sem status"}`;
 }
@@ -1927,17 +1934,39 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
         {technicalData.length > 0 && (
           <div style={{ marginTop: 14 }}>
             <strong>Dados técnicos da automação</strong>
-            <div className="data-list" style={{ marginTop: 10 }}>
-              {technicalData.map(([key, value]) => (
-                <div className="data-item" key={`${step.id}-${key}`}>
-                  <small>{formatTechnicalDataLabel(key)}</small>
-                  {key === "_integration.responsePreview" || key === "_integration.requestHeaders" || key === "_integration.requestBody" || key === "_integration.mappingResult" ? (
-                    <PreviewBlock value={value} />
-                  ) : (
-                    <strong>{toText(value) || "-"}</strong>
-                  )}
-                </div>
-              ))}
+            <div className="tablewrap technical-data-wrap" style={{ marginTop: 10, border: "1px solid var(--line)", borderRadius: 16 }}>
+              <table className="table technical-data-table">
+                <thead>
+                  <tr>
+                    <th>Campo</th>
+                    <th>Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {technicalData
+                    .filter(([key]) => !isTechnicalPreviewField(key))
+                    .map(([key, value]) => (
+                      <tr key={`${step.id}-${key}`}>
+                        <td className="technical-data-label-cell">
+                          <strong>{formatTechnicalDataLabel(key)}</strong>
+                        </td>
+                        <td className="technical-data-value-cell">{toText(value) || "-"}</td>
+                      </tr>
+                    ))}
+                  {technicalData
+                    .filter(([key]) => isTechnicalPreviewField(key))
+                    .map(([key, value]) => (
+                      <tr key={`${step.id}-${key}`}>
+                        <td className="technical-data-label-cell technical-data-label-cell-top">
+                          <strong>{formatTechnicalDataLabel(key)}</strong>
+                        </td>
+                        <td className="technical-data-preview-cell">
+                          <PreviewBlock value={value} />
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
