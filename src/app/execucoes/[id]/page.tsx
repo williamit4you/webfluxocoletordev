@@ -6,7 +6,7 @@ import type { ExecutionField, FieldOption, Flow, Instance, StepApiConfig } from 
 import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, LoaderCircle, Paperclip, Play, RotateCw, Save, ShieldAlert, Square } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { use, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, use, useEffect, useMemo, useRef, useState } from "react";
 
 declare global {
   interface Window {
@@ -727,6 +727,65 @@ function PreviewBlock({ title, value }: { title?: string; value: unknown }) {
 
 function getAutomaticStepTechnicalData(step: Instance["steps"][number]) {
   return Object.entries(step.data).filter(([key]) => key.startsWith("_integration."));
+}
+
+function formatIntegrationAttemptStatus(stepAttempt: Instance["steps"][number]["integrationAttempts"][number]) {
+  return `${stepAttempt.success ? "Sucesso" : "Falha"} - ${stepAttempt.responseStatusCode ?? "sem status"}`;
+}
+
+function formatIntegrationAttemptDate(value: string) {
+  return new Date(value).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatIntegrationAttemptDuration(value?: number | null) {
+  if (value == null || Number.isNaN(value)) {
+    return "-";
+  }
+
+  if (value < 1000) {
+    return `${value} ms`;
+  }
+
+  return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)} s`;
+}
+
+function getIntegrationAttemptUrlLabel(value: string) {
+  try {
+    const parsed = new URL(value);
+    return `${parsed.hostname}${parsed.pathname}`;
+  } catch {
+    return value;
+  }
+}
+
+function getIntegrationAttemptPreviewSummary(stepAttempt: Instance["steps"][number]["integrationAttempts"][number]) {
+  const preview = stepAttempt.responsePreview?.trim();
+  if (preview) {
+    const compact = preview.replace(/\s+/g, " ");
+    return compact.length > 90 ? `${compact.slice(0, 90)}...` : compact;
+  }
+
+  const error = stepAttempt.errorMessage?.trim();
+  if (error) {
+    return error.length > 90 ? `${error.slice(0, 90)}...` : error;
+  }
+
+  return "-";
+}
+
+function getIntegrationAttemptResponseLabel(stepAttempt: Instance["steps"][number]["integrationAttempts"][number]) {
+  const preview = stepAttempt.responsePreview?.trim();
+  if (preview) {
+    return preview.startsWith("{") || preview.startsWith("[") ? "JSON" : "Texto";
+  }
+
+  return stepAttempt.errorMessage?.trim() ? "Erro" : "-";
 }
 
 function tryParseIntervalMinutes(value?: string) {
@@ -1498,7 +1557,8 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const [reprocessingStepId, setReprocessingStepId] = useState("");
   const [cancelingStepId, setCancelingStepId] = useState("");
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
-  const [journeyView, setJourneyView] = useState<"timeline" | "diagram">("timeline");
+  const [expandedAttemptIds, setExpandedAttemptIds] = useState<Record<string, boolean>>({});
+  const [journeyView, setJourneyView] = useState<"timeline" | "diagram">("diagram");
   const [readerWarning, setReaderWarning] = useState("");
   const [scanning, setScanning] = useState(false);
   const [invalidFieldKeys, setInvalidFieldKeys] = useState<string[]>([]);
@@ -1644,6 +1704,10 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
   function toggleJourneyDiagramDetails(stepId: string) {
     setExpandedSteps(current => current[stepId] ? {} : { [stepId]: true });
+  }
+
+  function toggleAttemptDetails(attemptId: string) {
+    setExpandedAttemptIds(current => ({ ...current, [attemptId]: !current[attemptId] }));
   }
 
   function focusFirstInvalidField(fieldKey: string) {
@@ -1808,18 +1872,94 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
         {step.integrationAttempts.length > 0 && (
           <div style={{ marginTop: 14 }}>
             <strong>Integrações da etapa</strong>
-            <div className="data-list" style={{ marginTop: 10 }}>
-              {step.integrationAttempts.map(attempt => (
-                <div className="data-item" key={attempt.id}>
-                  <small>{attempt.method} | {new Date(attempt.createdAt).toLocaleString("pt-BR")}</small>
-                  <strong>{attempt.success ? "Sucesso" : "Falha"} - {attempt.responseStatusCode ?? "sem status"}</strong>
-                  <div className="section-copy" style={{ marginTop: 4, wordBreak: "break-word" }}>{attempt.url}</div>
-                  {attempt.requestHeaders && <PreviewBlock title="Headers enviados" value={attempt.requestHeaders} />}
-                  {attempt.requestBody && <PreviewBlock title="Body enviado" value={attempt.requestBody} />}
-                  {attempt.responsePreview && <PreviewBlock title="Resposta" value={attempt.responsePreview} />}
-                  {attempt.errorMessage && <div className="section-copy" style={{ marginTop: 8 }}>{attempt.errorMessage}</div>}
-                </div>
-              ))}
+            <div className="tablewrap integration-attempts-wrap" style={{ marginTop: 10, border: "1px solid var(--line)", borderRadius: 16 }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Data</th>
+                    <th>Metodo</th>
+                    <th>Resultado</th>
+                    <th>Duracao</th>
+                    <th>Endpoint</th>
+                    <th>Resumo</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {step.integrationAttempts.map(attempt => {
+                    const expanded = !!expandedAttemptIds[attempt.id];
+                    const hasDetails = !!(attempt.requestHeaders || attempt.requestBody || attempt.responsePreview || attempt.errorMessage);
+
+                    return (
+                      <Fragment key={attempt.id}>
+                        <tr className={expanded ? "row-focus" : undefined}>
+                          <td className="integration-attempts-date-cell">
+                            <strong>{formatIntegrationAttemptDate(attempt.createdAt)}</strong>
+                          </td>
+                          <td>
+                            <span className="integration-attempts-method">{attempt.method || "-"}</span>
+                          </td>
+                          <td>
+                            <div className="integration-attempts-status" title={formatIntegrationAttemptStatus(attempt)}>
+                              <strong>{attempt.success ? "Sucesso" : "Falha"}</strong>
+                              <span>{attempt.responseStatusCode ?? "sem status"}</span>
+                            </div>
+                          </td>
+                          <td>{formatIntegrationAttemptDuration(attempt.durationMs)}</td>
+                          <td className="integration-attempts-url-cell">
+                            <div className="integration-attempts-url-shell">
+                              <strong>{getIntegrationAttemptUrlLabel(attempt.url)}</strong>
+                              <a href={attempt.url} target="_blank" rel="noreferrer" className="integration-attempts-url-link">
+                                abrir URL
+                              </a>
+                            </div>
+                          </td>
+                          <td className="integration-attempts-summary-cell">
+                            <span className="integration-attempts-summary-type">{getIntegrationAttemptResponseLabel(attempt)}</span>
+                            <div className="integration-attempts-summary-text">{getIntegrationAttemptPreviewSummary(attempt)}</div>
+                          </td>
+                          <td>
+                            {hasDetails ? (
+                              <button className="btn btn-ghost btn-inline" type="button" onClick={() => toggleAttemptDetails(attempt.id)}>
+                                {expanded ? "Ocultar detalhes" : "Ver detalhes"}
+                              </button>
+                            ) : "-"}
+                          </td>
+                        </tr>
+                        {expanded && (
+                          <tr className="row-focus">
+                            <td colSpan={7}>
+                              <div className="integration-attempts-details">
+                                {attempt.requestHeaders && (
+                                  <div className="integration-attempts-detail-card">
+                                    <PreviewBlock title="Headers enviados" value={attempt.requestHeaders} />
+                                  </div>
+                                )}
+                                {attempt.requestBody && (
+                                  <div className="integration-attempts-detail-card">
+                                    <PreviewBlock title="Body enviado" value={attempt.requestBody} />
+                                  </div>
+                                )}
+                                {attempt.responsePreview && (
+                                  <div className="integration-attempts-detail-card integration-attempts-detail-card-wide">
+                                    <PreviewBlock title="Resposta" value={attempt.responsePreview} />
+                                  </div>
+                                )}
+                                {attempt.errorMessage && (
+                                  <div className="integration-attempts-detail-card integration-attempts-detail-card-wide">
+                                    <div className="section-copy preview-block-title">Mensagem de erro</div>
+                                    <div className="integration-attempts-error">{attempt.errorMessage}</div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -2287,15 +2427,6 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
             </div>
             <div className="view-toggle" role="tablist" aria-label="Modo de visualização da jornada">
               <button
-                className={`view-toggle-btn ${journeyView === "timeline" ? "active" : ""}`}
-                type="button"
-                role="tab"
-                aria-selected={journeyView === "timeline"}
-                onClick={() => setJourneyView("timeline")}
-              >
-                Visão 1
-              </button>
-              <button
                 className={`view-toggle-btn ${journeyView === "diagram" ? "active" : ""}`}
                 type="button"
                 role="tab"
@@ -2303,6 +2434,15 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 onClick={() => setJourneyView("diagram")}
               >
                 Visão 2
+              </button>
+              <button
+                className={`view-toggle-btn ${journeyView === "timeline" ? "active" : ""}`}
+                type="button"
+                role="tab"
+                aria-selected={journeyView === "timeline"}
+                onClick={() => setJourneyView("timeline")}
+              >
+                Visão 1
               </button>
             </div>
           </div>

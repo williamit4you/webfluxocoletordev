@@ -45,6 +45,26 @@
 .toast-copy{color:var(--muted);margin:6px 0 0;font-size:13px;line-height:1.4}
 .table tr.row-focus td{background:#eef8f3}
 .table tr.row-focus td:first-child{box-shadow:inset 4px 0 0 var(--brand)}
+.integration-attempts-wrap{background:#fcfefd}
+.integration-attempts-wrap .table th{background:#f5faf7}
+.integration-attempts-date-cell strong{display:block;white-space:nowrap}
+.integration-attempts-method{display:inline-flex;align-items:center;justify-content:center;min-width:58px;padding:6px 10px;border-radius:999px;background:#edf7f2;color:var(--brand);font-size:12px;font-weight:800}
+.integration-attempts-status{display:grid;gap:2px}
+.integration-attempts-status strong{font-size:13px}
+.integration-attempts-status span{color:var(--muted);font-size:12px}
+.integration-attempts-url-cell{min-width:260px;max-width:360px}
+.integration-attempts-url-shell{display:grid;gap:4px}
+.integration-attempts-url-shell strong{word-break:break-word;font-size:13px}
+.integration-attempts-url-link{color:var(--brand2);font-size:12px;text-decoration:underline}
+.integration-attempts-summary-cell{min-width:240px;max-width:360px}
+.integration-attempts-summary-type{display:inline-flex;margin-bottom:6px;padding:4px 8px;border-radius:999px;background:#f0f4f2;color:#4f5f59;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.integration-attempts-summary-text{color:#41504a;font-size:13px;line-height:1.45;word-break:break-word}
+.integration-attempts-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:4px 0}
+.integration-attempts-detail-card{border:1px solid #dce7e1;border-radius:14px;background:#fff;padding:12px}
+.integration-attempts-detail-card-wide{grid-column:1/-1}
+.integration-attempts-error{border:1px solid #f0d3d0;border-radius:12px;background:#fff6f5;color:#8b3630;padding:12px 14px;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.integration-attempts-detail-card .preview-block{margin-top:0}
+@media(max-width:900px){.integration-attempts-details{grid-template-columns:1fr}.integration-attempts-url-cell,.integration-attempts-summary-cell{min-width:220px;max-width:none}}
 .record-version-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px}
 .version-chip{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
 .version-chip-current{background:var(--soft);color:var(--brand)}

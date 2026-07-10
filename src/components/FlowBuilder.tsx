@@ -905,7 +905,7 @@ function ResponseRuleEditor({
 
 export function FlowBuilder({ flowId }: { flowId?: string }) {
   const router = useRouter();
-  const [builderView, setBuilderView] = useState<"list" | "diagram">("list");
+  const [builderView, setBuilderView] = useState<"list" | "diagram">("diagram");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [active, setActive] = useState(true);
@@ -1712,15 +1712,6 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
         <div className="builder-toolbar">
           <div className="view-toggle" role="tablist" aria-label="Modo de visualizacao das etapas">
             <button
-              className={`view-toggle-btn ${builderView === "list" ? "active" : ""}`}
-              type="button"
-              role="tab"
-              aria-selected={builderView === "list"}
-              onClick={() => setBuilderView("list")}
-            >
-              Visao 1
-            </button>
-            <button
               className={`view-toggle-btn ${builderView === "diagram" ? "active" : ""}`}
               type="button"
               role="tab"
@@ -1728,6 +1719,15 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
               onClick={() => setBuilderView("diagram")}
             >
               Visao 2
+            </button>
+            <button
+              className={`view-toggle-btn ${builderView === "list" ? "active" : ""}`}
+              type="button"
+              role="tab"
+              aria-selected={builderView === "list"}
+              onClick={() => setBuilderView("list")}
+            >
+              Visao 1
             </button>
           </div>
           <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={addStep}>
