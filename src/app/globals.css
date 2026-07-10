@@ -51,10 +51,11 @@
 .integration-attempts-wrap .table th{background:#f5faf7}
 .technical-data-wrap{background:#fcfefd}
 .technical-data-wrap .table th{background:#f5faf7}
-.technical-data-label-cell{width:260px}
+.technical-data-label-cell{width:180px}
 .technical-data-label-cell strong{display:block;font-size:13px}
 .technical-data-label-cell-top{vertical-align:top}
 .technical-data-value-cell{font-weight:700;color:var(--ink);word-break:break-word}
+.technical-data-empty-cell{background:#fcfefd}
 .technical-data-preview-cell .preview-block{margin-top:0}
 .integration-attempts-date-cell strong{display:block;white-space:nowrap}
 .integration-attempts-method{display:inline-flex;align-items:center;justify-content:center;min-width:58px;padding:6px 10px;border-radius:999px;background:#edf7f2;color:var(--brand);font-size:12px;font-weight:800}

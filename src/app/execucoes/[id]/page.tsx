@@ -2,7 +2,7 @@
 
 import { api } from "@/lib/api";
 import { readDanfeInBrowser as readDanfeFileInBrowser } from "@/lib/danfeReader";
-import type { ExecutionField, FieldOption, Flow, Instance, IntegrationAttempt, PagedResult, StepApiConfig } from "@/lib/types";
+import type { ExecutionField, FieldOption, Flow, Instance, PagedIntegrationAttemptResult, StepApiConfig } from "@/lib/types";
 import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, Copy, LoaderCircle, Paperclip, Play, RotateCw, Save, ShieldAlert, Square } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -755,6 +755,14 @@ function isTechnicalPreviewField(key: string) {
     || key === "_integration.requestHeaders"
     || key === "_integration.requestBody"
     || key === "_integration.mappingResult";
+}
+
+function chunkEntries<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
 }
 
 function formatIntegrationAttemptStatus(stepAttempt: Instance["steps"][number]["integrationAttempts"][number]) {
@@ -1589,6 +1597,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const [detailSections, setDetailSections] = useState<Record<string, boolean>>({});
   const [attemptPageByStep, setAttemptPageByStep] = useState<Record<string, number>>({});
   const [attemptPageSizeByStep, setAttemptPageSizeByStep] = useState<Record<string, number>>({});
+  const [attemptStatusCodeFilterByStep, setAttemptStatusCodeFilterByStep] = useState<Record<string, string>>({});
   const [loadingAttemptStepId, setLoadingAttemptStepId] = useState("");
   const [copiedUrlAttemptId, setCopiedUrlAttemptId] = useState("");
   const [journeyView, setJourneyView] = useState<"timeline" | "diagram">("diagram");
@@ -1635,6 +1644,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       syncCurrentStepState(result, setItem, setFormData, setNotes);
       setAttemptPageByStep(Object.fromEntries(result.steps.map(step => [step.id, 1])));
       setAttemptPageSizeByStep(Object.fromEntries(result.steps.map(step => [step.id, 10])));
+      setAttemptStatusCodeFilterByStep(Object.fromEntries(result.steps.map(step => [step.id, ""])));
       try {
         setFlowDefinition(await api<Flow>(`/flows/${result.flowDefinitionId}`));
       } catch {
@@ -1649,7 +1659,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
       setError(e.message);
     });
 
-  function applyStepAttempts(stepId: string, paged: PagedResult<IntegrationAttempt>) {
+  function applyStepAttempts(stepId: string, paged: PagedIntegrationAttemptResult) {
     setItem(current => current
       ? {
         ...current,
@@ -1657,22 +1667,32 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           ? {
             ...step,
             integrationAttempts: paged.items,
-            integrationAttemptsTotalCount: paged.totalCount
+            integrationAttemptsTotalCount: paged.totalCount,
+            integrationAttemptStatusFilters: paged.availableStatusCodes
           }
           : step)
       }
       : current);
   }
 
-  async function loadStepAttempts(stepId: string, page: number, pageSize: number) {
+  async function loadStepAttempts(stepId: string, page: number, pageSize: number, statusCode = attemptStatusCodeFilterByStep[stepId] ?? "") {
     setLoadingAttemptStepId(stepId);
     setError("");
 
     try {
-      const paged = await api<PagedResult<IntegrationAttempt>>(`/instances/${id}/steps/${stepId}/integration-attempts?page=${page}&pageSize=${pageSize}`);
+      const query = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize)
+      });
+      if (statusCode) {
+        query.set("statusCode", statusCode);
+      }
+
+      const paged = await api<PagedIntegrationAttemptResult>(`/instances/${id}/steps/${stepId}/integration-attempts?${query.toString()}`);
       applyStepAttempts(stepId, paged);
       setAttemptPageByStep(current => ({ ...current, [stepId]: paged.page }));
       setAttemptPageSizeByStep(current => ({ ...current, [stepId]: paged.pageSize }));
+      setAttemptStatusCodeFilterByStep(current => ({ ...current, [stepId]: statusCode }));
       setExpandedAttemptIds({});
     } catch (e) {
       if (handleForbiddenRedirect(e)) {
@@ -1683,6 +1703,10 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     } finally {
       setLoadingAttemptStepId("");
     }
+  }
+
+  function formatAttemptStatusFilterLabel(statusCode: number) {
+    return String(statusCode);
   }
 
   async function copyAttemptUrl(attemptId: string, url: string) {
@@ -1853,6 +1877,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     const ruleMode = toText(step.data["_integration.responseRule.mode"]);
     const actualValue = toText(step.data["_integration.responseRule.actualValue"]);
     const expectedValue = toText(step.data["_integration.responseRule.expectedValue"]);
+    const simpleTechnicalData = technicalData.filter(([key]) => !isTechnicalPreviewField(key));
+    const previewTechnicalData = technicalData.filter(([key]) => isTechnicalPreviewField(key));
+    const technicalRows = chunkEntries(simpleTechnicalData, 2);
 
     return (
       <div style={{ marginTop: 14, paddingLeft: 38 }}>
@@ -1999,27 +2026,35 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                       <tr>
                         <th>Campo</th>
                         <th>Valor</th>
+                        <th>Campo</th>
+                        <th>Valor</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {technicalData
-                        .filter(([key]) => !isTechnicalPreviewField(key))
-                        .map(([key, value]) => (
-                          <tr key={`${step.id}-${key}`}>
-                            <td className="technical-data-label-cell">
-                              <strong>{formatTechnicalDataLabel(key)}</strong>
-                            </td>
-                            <td className="technical-data-value-cell">{toText(value) || "-"}</td>
-                          </tr>
-                        ))}
-                      {technicalData
-                        .filter(([key]) => isTechnicalPreviewField(key))
-                        .map(([key, value]) => (
+                      {technicalRows.map((row, rowIndex) => (
+                        <tr key={`${step.id}-technical-row-${rowIndex}`}>
+                          {row.map(([key, value]) => (
+                            <Fragment key={`${step.id}-${key}`}>
+                              <td className="technical-data-label-cell">
+                                <strong>{formatTechnicalDataLabel(key)}</strong>
+                              </td>
+                              <td className="technical-data-value-cell">{toText(value) || "-"}</td>
+                            </Fragment>
+                          ))}
+                          {row.length === 1 && (
+                            <>
+                              <td className="technical-data-label-cell technical-data-empty-cell"></td>
+                              <td className="technical-data-value-cell technical-data-empty-cell"></td>
+                            </>
+                          )}
+                        </tr>
+                      ))}
+                      {previewTechnicalData.map(([key, value]) => (
                           <tr key={`${step.id}-${key}`}>
                             <td className="technical-data-label-cell technical-data-label-cell-top">
                               <strong>{formatTechnicalDataLabel(key)}</strong>
                             </td>
-                            <td className="technical-data-preview-cell">
+                            <td className="technical-data-preview-cell" colSpan={3}>
                               <PreviewBlock value={value} />
                             </td>
                           </tr>
@@ -2136,6 +2171,26 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 </div>
                 <div className="pagination-bar">
                   <div className="pagination-actions">
+                    {step.integrationAttemptStatusFilters.some(filter => filter.statusCode != null) && (
+                      <label className="pagination-size-control">
+                        <span>Resultado</span>
+                        <select
+                          className="select"
+                          value={attemptStatusCodeFilterByStep[step.id] ?? ""}
+                          onChange={event => void loadStepAttempts(step.id, 1, attemptPageSizeByStep[step.id] ?? 10, event.target.value)}
+                          disabled={loadingAttemptStepId === step.id}
+                        >
+                          <option value="">Todos</option>
+                          {step.integrationAttemptStatusFilters
+                            .filter(filter => filter.statusCode != null)
+                            .map(filter => (
+                              <option key={`${step.id}-status-${filter.statusCode}`} value={String(filter.statusCode)}>
+                                {formatAttemptStatusFilterLabel(filter.statusCode!)} ({filter.count})
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                    )}
                     <span className="pagination-page">
                       {(() => {
                         const currentPage = attemptPageByStep[step.id] ?? 1;
@@ -2145,15 +2200,15 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                         return `Exibindo ${start}-${end} de ${step.integrationAttemptsTotalCount}`;
                       })()}
                     </span>
-                    <label className="pagination-size-control">
-                      <span>Por pagina</span>
-                      <select
-                        className="select"
-                        value={attemptPageSizeByStep[step.id] ?? 10}
-                        onChange={event => void loadStepAttempts(step.id, 1, Number(event.target.value))}
-                        disabled={loadingAttemptStepId === step.id}
-                      >
-                        <option value={10}>10</option>
+                      <label className="pagination-size-control">
+                        <span>Por pagina</span>
+                        <select
+                          className="select"
+                          value={attemptPageSizeByStep[step.id] ?? 10}
+                          onChange={event => void loadStepAttempts(step.id, 1, Number(event.target.value))}
+                          disabled={loadingAttemptStepId === step.id}
+                        >
+                          <option value={10}>10</option>
                         <option value={50}>50</option>
                         <option value={100}>100</option>
                       </select>
