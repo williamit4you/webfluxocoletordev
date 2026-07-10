@@ -1586,6 +1586,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const [cancelingStepId, setCancelingStepId] = useState("");
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
   const [expandedAttemptIds, setExpandedAttemptIds] = useState<Record<string, boolean>>({});
+  const [detailSections, setDetailSections] = useState<Record<string, boolean>>({});
   const [attemptPageByStep, setAttemptPageByStep] = useState<Record<string, number>>({});
   const [attemptPageSizeByStep, setAttemptPageSizeByStep] = useState<Record<string, number>>({});
   const [loadingAttemptStepId, setLoadingAttemptStepId] = useState("");
@@ -1790,6 +1791,44 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     setExpandedAttemptIds(current => ({ ...current, [attemptId]: !current[attemptId] }));
   }
 
+  function toggleDetailSection(stepId: string, section: "data" | "technical" | "attempts") {
+    const key = `${stepId}:${section}`;
+    setDetailSections(current => ({ ...current, [key]: !current[key] }));
+  }
+
+  function isDetailSectionOpen(stepId: string, section: "data" | "technical" | "attempts") {
+    return !!detailSections[`${stepId}:${section}`];
+  }
+
+  function formatBrazilDateTime(value: string) {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return value;
+    }
+
+    return parsed.toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+  }
+
+  function formatFieldDisplayValue(field: ExecutionField, value: unknown) {
+    const text = toText(value).trim();
+    if (!text) {
+      return "-";
+    }
+
+    if (field.type === 2 || /^\d{4}-\d{2}-\d{2}t\d{2}:\d{2}:\d{2}/i.test(text)) {
+      return formatBrazilDateTime(text);
+    }
+
+    return text;
+  }
+
   function focusFirstInvalidField(fieldKey: string) {
     const element = fieldRefs.current[fieldKey];
     if (!element) {
@@ -1872,245 +1911,278 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
         )}
 
         {step.fields.length > 0 && (
-          <>
-            <strong>Dados da etapa</strong>
-            <div className="data-list" style={{ marginTop: 10 }}>
-              {step.fields.map(field => {
-                const uploadAssets = isUploadField(field.type) ? parseUploadAssets(step.data[field.key]) : [];
-                const structuredRows = isStructuredListField(field) ? parseStructuredRows(step.data[field.key]) : [];
-
-                return (
-                  <div className="data-item" key={`${step.id}-${field.key}`}>
-                    <small>{field.label}</small>
-                    {uploadAssets.length > 0 ? (
-                      <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
-                        {uploadAssets.map(asset => (
-                          <a key={asset.id} href={buildAssetUrl(asset.url)} target="_blank" rel="noreferrer">
-                            {asset.fileName}
-                          </a>
-                        ))}
-                      </div>
-                    ) : structuredRows.length > 0 ? (
-                      <div className="tablewrap" style={{ marginTop: 6, border: "1px solid var(--line)", borderRadius: 14 }}>
-                        <table className="table">
-                          <thead>
-                            <tr>
-                              {field.options.map(option => {
-                                const key = option.key?.trim();
-                                if (!key) {
-                                  return null;
-                                }
-
-                                return <th key={`${field.key}-history-header-${key}`}>{option.label}</th>;
-                              })}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {structuredRows.map((row, rowIndex) => (
-                              <tr key={`${field.key}-history-row-${rowIndex}`}>
-                                {field.options.map(option => {
-                                  const key = option.key?.trim();
-                                  if (!key) {
-                                    return null;
-                                  }
-
-                                  return <td key={`${field.key}-${key}-${rowIndex}`}>{toText(row[key]) || "-"}</td>;
-                                })}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <strong>{field.value || "-"}</strong>
-                    )}
-                  </div>
-                );
-              })}
+          <div className="accordion-section soft">
+            <div className="accordion-header">
+              <button className="accordion-trigger" type="button" onClick={() => toggleDetailSection(step.id, "data")}>
+                <div>
+                  <h4>Dados da etapa</h4>
+                </div>
+                <span className="accordion-icon">{isDetailSectionOpen(step.id, "data") ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</span>
+              </button>
             </div>
-          </>
+            {isDetailSectionOpen(step.id, "data") && (
+              <div className="accordion-content">
+                <div className="data-list" style={{ marginTop: 10 }}>
+                  {step.fields.map(field => {
+                    const uploadAssets = isUploadField(field.type) ? parseUploadAssets(step.data[field.key]) : [];
+                    const structuredRows = isStructuredListField(field) ? parseStructuredRows(step.data[field.key]) : [];
+
+                    return (
+                      <div className="data-item" key={`${step.id}-${field.key}`}>
+                        <small>{field.label}</small>
+                        {uploadAssets.length > 0 ? (
+                          <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
+                            {uploadAssets.map(asset => (
+                              <a key={asset.id} href={buildAssetUrl(asset.url)} target="_blank" rel="noreferrer">
+                                {asset.fileName}
+                              </a>
+                            ))}
+                          </div>
+                        ) : structuredRows.length > 0 ? (
+                          <div className="tablewrap" style={{ marginTop: 6, border: "1px solid var(--line)", borderRadius: 14 }}>
+                            <table className="table">
+                              <thead>
+                                <tr>
+                                  {field.options.map(option => {
+                                    const key = option.key?.trim();
+                                    if (!key) {
+                                      return null;
+                                    }
+
+                                    return <th key={`${field.key}-history-header-${key}`}>{option.label}</th>;
+                                  })}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {structuredRows.map((row, rowIndex) => (
+                                  <tr key={`${field.key}-history-row-${rowIndex}`}>
+                                    {field.options.map(option => {
+                                      const key = option.key?.trim();
+                                      if (!key) {
+                                        return null;
+                                      }
+
+                                      return <td key={`${field.key}-${key}-${rowIndex}`}>{toText(row[key]) || "-"}</td>;
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <strong>{formatFieldDisplayValue(field, field.value)}</strong>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {technicalData.length > 0 && (
-          <div style={{ marginTop: 14 }}>
-            <strong>Dados técnicos da automação</strong>
-            <div className="tablewrap technical-data-wrap" style={{ marginTop: 10, border: "1px solid var(--line)", borderRadius: 16 }}>
-              <table className="table technical-data-table">
-                <thead>
-                  <tr>
-                    <th>Campo</th>
-                    <th>Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {technicalData
-                    .filter(([key]) => !isTechnicalPreviewField(key))
-                    .map(([key, value]) => (
-                      <tr key={`${step.id}-${key}`}>
-                        <td className="technical-data-label-cell">
-                          <strong>{formatTechnicalDataLabel(key)}</strong>
-                        </td>
-                        <td className="technical-data-value-cell">{toText(value) || "-"}</td>
-                      </tr>
-                    ))}
-                  {technicalData
-                    .filter(([key]) => isTechnicalPreviewField(key))
-                    .map(([key, value]) => (
-                      <tr key={`${step.id}-${key}`}>
-                        <td className="technical-data-label-cell technical-data-label-cell-top">
-                          <strong>{formatTechnicalDataLabel(key)}</strong>
-                        </td>
-                        <td className="technical-data-preview-cell">
-                          <PreviewBlock value={value} />
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
+          <div className="accordion-section soft" style={{ marginTop: 14 }}>
+            <div className="accordion-header">
+              <button className="accordion-trigger" type="button" onClick={() => toggleDetailSection(step.id, "technical")}>
+                <div>
+                  <h4>Dados técnicos da automação</h4>
+                </div>
+                <span className="accordion-icon">{isDetailSectionOpen(step.id, "technical") ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</span>
+              </button>
             </div>
+            {isDetailSectionOpen(step.id, "technical") && (
+              <div className="accordion-content">
+                <div className="tablewrap technical-data-wrap" style={{ marginTop: 10, border: "1px solid var(--line)", borderRadius: 16 }}>
+                  <table className="table technical-data-table">
+                    <thead>
+                      <tr>
+                        <th>Campo</th>
+                        <th>Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {technicalData
+                        .filter(([key]) => !isTechnicalPreviewField(key))
+                        .map(([key, value]) => (
+                          <tr key={`${step.id}-${key}`}>
+                            <td className="technical-data-label-cell">
+                              <strong>{formatTechnicalDataLabel(key)}</strong>
+                            </td>
+                            <td className="technical-data-value-cell">{toText(value) || "-"}</td>
+                          </tr>
+                        ))}
+                      {technicalData
+                        .filter(([key]) => isTechnicalPreviewField(key))
+                        .map(([key, value]) => (
+                          <tr key={`${step.id}-${key}`}>
+                            <td className="technical-data-label-cell technical-data-label-cell-top">
+                              <strong>{formatTechnicalDataLabel(key)}</strong>
+                            </td>
+                            <td className="technical-data-preview-cell">
+                              <PreviewBlock value={value} />
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {(step.integrationAttemptsTotalCount > 0 || step.integrationAttempts.length > 0) && (
-          <div style={{ marginTop: 14 }}>
-            <strong>Integrações da etapa</strong>
-            <div className="tablewrap integration-attempts-wrap" style={{ marginTop: 10, border: "1px solid var(--line)", borderRadius: 16 }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Data</th>
-                    <th>Método</th>
-                    <th>Resultado</th>
-                    <th>Duração</th>
-                    <th>Endpoint</th>
-                    <th>Resumo</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {step.integrationAttempts.map(attempt => {
-                    const expanded = !!expandedAttemptIds[attempt.id];
-                    const hasDetails = !!(attempt.requestHeaders || attempt.requestBody || attempt.responsePreview || attempt.errorMessage);
+          <div className="accordion-section soft" style={{ marginTop: 14 }}>
+            <div className="accordion-header">
+              <button className="accordion-trigger" type="button" onClick={() => toggleDetailSection(step.id, "attempts")}>
+                <div>
+                  <h4>Integrações da etapa</h4>
+                </div>
+                <span className="accordion-icon">{isDetailSectionOpen(step.id, "attempts") ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</span>
+              </button>
+            </div>
+            {isDetailSectionOpen(step.id, "attempts") && (
+              <div className="accordion-content">
+                <div className="tablewrap integration-attempts-wrap" style={{ marginTop: 10, border: "1px solid var(--line)", borderRadius: 16 }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Data</th>
+                        <th>Método</th>
+                        <th>Resultado</th>
+                        <th>Duração</th>
+                        <th>Endpoint</th>
+                        <th>Resumo</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {step.integrationAttempts.map(attempt => {
+                        const expanded = !!expandedAttemptIds[attempt.id];
+                        const hasDetails = !!(attempt.requestHeaders || attempt.requestBody || attempt.responsePreview || attempt.errorMessage);
 
-                    return (
-                      <Fragment key={attempt.id}>
-                        <tr className={expanded ? "row-focus" : undefined}>
-                          <td className="integration-attempts-date-cell">
-                            <strong>{formatIntegrationAttemptDate(attempt.createdAt)}</strong>
-                          </td>
-                          <td>
-                            <span className="integration-attempts-method">{attempt.method || "-"}</span>
-                          </td>
-                          <td>
-                            <div className="integration-attempts-status" title={formatIntegrationAttemptStatus(attempt)}>
-                              <strong>{attempt.success ? "Sucesso" : "Falha"}</strong>
-                              <span>{attempt.responseStatusCode ?? "sem status"}</span>
-                            </div>
-                          </td>
-                          <td>{formatIntegrationAttemptDuration(attempt.durationMs)}</td>
-                          <td className="integration-attempts-url-cell">
-                            <div className="integration-attempts-url-shell">
-                              <strong>{getIntegrationAttemptUrlLabel(attempt.url)}</strong>
-                              <button className="btn btn-ghost btn-inline integration-attempts-url-copy" type="button" onClick={() => void copyAttemptUrl(attempt.id, attempt.url)}>
-                                <Copy size={14} />
-                                {copiedUrlAttemptId === attempt.id ? "Copiado" : "Copiar URL"}
-                              </button>
-                            </div>
-                          </td>
-                          <td className="integration-attempts-summary-cell">
-                            <span className="integration-attempts-summary-type">{getIntegrationAttemptResponseLabel(attempt)}</span>
-                            <div className="integration-attempts-summary-text">{getIntegrationAttemptPreviewSummary(attempt)}</div>
-                          </td>
-                          <td>
-                            {hasDetails ? (
-                              <button className="btn btn-ghost btn-inline" type="button" onClick={() => toggleAttemptDetails(attempt.id)}>
-                                {expanded ? "Ocultar detalhes" : "Ver detalhes"}
-                              </button>
-                            ) : "-"}
-                          </td>
-                        </tr>
-                        {expanded && (
-                          <tr className="row-focus">
-                            <td colSpan={7}>
-                              <div className="integration-attempts-details">
-                                {attempt.requestHeaders && (
-                                  <div className="integration-attempts-detail-card">
-                                    <PreviewBlock title="Headers enviados" value={attempt.requestHeaders} />
+                        return (
+                          <Fragment key={attempt.id}>
+                            <tr className={expanded ? "row-focus" : undefined}>
+                              <td className="integration-attempts-date-cell">
+                                <strong>{formatIntegrationAttemptDate(attempt.createdAt)}</strong>
+                              </td>
+                              <td>
+                                <span className="integration-attempts-method">{attempt.method || "-"}</span>
+                              </td>
+                              <td>
+                                <div className="integration-attempts-status" title={formatIntegrationAttemptStatus(attempt)}>
+                                  <strong>{attempt.success ? "Sucesso" : "Falha"}</strong>
+                                  <span>{attempt.responseStatusCode ?? "sem status"}</span>
+                                </div>
+                              </td>
+                              <td>{formatIntegrationAttemptDuration(attempt.durationMs)}</td>
+                              <td className="integration-attempts-url-cell">
+                                <div className="integration-attempts-url-shell">
+                                  <strong>{getIntegrationAttemptUrlLabel(attempt.url)}</strong>
+                                  <button className="btn btn-ghost btn-inline integration-attempts-url-copy" type="button" onClick={() => void copyAttemptUrl(attempt.id, attempt.url)}>
+                                    <Copy size={14} />
+                                    {copiedUrlAttemptId === attempt.id ? "Copiado" : "Copiar URL"}
+                                  </button>
+                                </div>
+                              </td>
+                              <td className="integration-attempts-summary-cell">
+                                <span className="integration-attempts-summary-type">{getIntegrationAttemptResponseLabel(attempt)}</span>
+                                <div className="integration-attempts-summary-text">{getIntegrationAttemptPreviewSummary(attempt)}</div>
+                              </td>
+                              <td>
+                                {hasDetails ? (
+                                  <button className="btn btn-ghost btn-inline" type="button" onClick={() => toggleAttemptDetails(attempt.id)}>
+                                    {expanded ? "Ocultar detalhes" : "Ver detalhes"}
+                                  </button>
+                                ) : "-"}
+                              </td>
+                            </tr>
+                            {expanded && (
+                              <tr className="row-focus">
+                                <td colSpan={7}>
+                                  <div className="integration-attempts-details">
+                                    {attempt.requestHeaders && (
+                                      <div className="integration-attempts-detail-card">
+                                        <PreviewBlock title="Headers enviados" value={attempt.requestHeaders} />
+                                      </div>
+                                    )}
+                                    {attempt.requestBody && (
+                                      <div className="integration-attempts-detail-card">
+                                        <PreviewBlock title="Body enviado" value={attempt.requestBody} />
+                                      </div>
+                                    )}
+                                    {attempt.responsePreview && (
+                                      <div className="integration-attempts-detail-card integration-attempts-detail-card-wide">
+                                        <PreviewBlock title="Resposta" value={attempt.responsePreview} />
+                                      </div>
+                                    )}
+                                    {attempt.errorMessage && (
+                                      <div className="integration-attempts-detail-card integration-attempts-detail-card-wide">
+                                        <div className="section-copy preview-block-title">Mensagem de erro</div>
+                                        <div className="integration-attempts-error">{attempt.errorMessage}</div>
+                                      </div>
+                                    )}
                                   </div>
-                                )}
-                                {attempt.requestBody && (
-                                  <div className="integration-attempts-detail-card">
-                                    <PreviewBlock title="Body enviado" value={attempt.requestBody} />
-                                  </div>
-                                )}
-                                {attempt.responsePreview && (
-                                  <div className="integration-attempts-detail-card integration-attempts-detail-card-wide">
-                                    <PreviewBlock title="Resposta" value={attempt.responsePreview} />
-                                  </div>
-                                )}
-                                {attempt.errorMessage && (
-                                  <div className="integration-attempts-detail-card integration-attempts-detail-card-wide">
-                                    <div className="section-copy preview-block-title">Mensagem de erro</div>
-                                    <div className="integration-attempts-error">{attempt.errorMessage}</div>
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="pagination-bar">
-              <div className="pagination-actions">
-                <span className="pagination-page">
-                  {(() => {
-                    const currentPage = attemptPageByStep[step.id] ?? 1;
-                    const pageSize = attemptPageSizeByStep[step.id] ?? 10;
-                    const start = step.integrationAttemptsTotalCount === 0 ? 0 : ((currentPage - 1) * pageSize) + 1;
-                    const end = Math.min(currentPage * pageSize, step.integrationAttemptsTotalCount);
-                    return `Exibindo ${start}-${end} de ${step.integrationAttemptsTotalCount}`;
-                  })()}
-                </span>
-                <label className="pagination-size-control">
-                  <span>Por pagina</span>
-                  <select
-                    className="select"
-                    value={attemptPageSizeByStep[step.id] ?? 10}
-                    onChange={event => void loadStepAttempts(step.id, 1, Number(event.target.value))}
-                    disabled={loadingAttemptStepId === step.id}
-                  >
-                    <option value={10}>10</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                </label>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="pagination-bar">
+                  <div className="pagination-actions">
+                    <span className="pagination-page">
+                      {(() => {
+                        const currentPage = attemptPageByStep[step.id] ?? 1;
+                        const pageSize = attemptPageSizeByStep[step.id] ?? 10;
+                        const start = step.integrationAttemptsTotalCount === 0 ? 0 : ((currentPage - 1) * pageSize) + 1;
+                        const end = Math.min(currentPage * pageSize, step.integrationAttemptsTotalCount);
+                        return `Exibindo ${start}-${end} de ${step.integrationAttemptsTotalCount}`;
+                      })()}
+                    </span>
+                    <label className="pagination-size-control">
+                      <span>Por pagina</span>
+                      <select
+                        className="select"
+                        value={attemptPageSizeByStep[step.id] ?? 10}
+                        onChange={event => void loadStepAttempts(step.id, 1, Number(event.target.value))}
+                        disabled={loadingAttemptStepId === step.id}
+                      >
+                        <option value={10}>10</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="pagination-actions">
+                    <button
+                      className="btn btn-secondary"
+                      type="button"
+                      disabled={(attemptPageByStep[step.id] ?? 1) <= 1 || loadingAttemptStepId === step.id}
+                      onClick={() => void loadStepAttempts(step.id, (attemptPageByStep[step.id] ?? 1) - 1, attemptPageSizeByStep[step.id] ?? 10)}
+                    >
+                      Anterior
+                    </button>
+                    <span className="pagination-page">
+                      Pagina {attemptPageByStep[step.id] ?? 1} de {Math.max(1, Math.ceil(step.integrationAttemptsTotalCount / (attemptPageSizeByStep[step.id] ?? 10)))}
+                    </span>
+                    <button
+                      className="btn btn-secondary"
+                      type="button"
+                      disabled={(attemptPageByStep[step.id] ?? 1) >= Math.max(1, Math.ceil(step.integrationAttemptsTotalCount / (attemptPageSizeByStep[step.id] ?? 10))) || loadingAttemptStepId === step.id}
+                      onClick={() => void loadStepAttempts(step.id, (attemptPageByStep[step.id] ?? 1) + 1, attemptPageSizeByStep[step.id] ?? 10)}
+                    >
+                      Proxima
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="pagination-actions">
-                <button
-                  className="btn btn-secondary"
-                  type="button"
-                  disabled={(attemptPageByStep[step.id] ?? 1) <= 1 || loadingAttemptStepId === step.id}
-                  onClick={() => void loadStepAttempts(step.id, (attemptPageByStep[step.id] ?? 1) - 1, attemptPageSizeByStep[step.id] ?? 10)}
-                >
-                  Anterior
-                </button>
-                <span className="pagination-page">
-                  Pagina {attemptPageByStep[step.id] ?? 1} de {Math.max(1, Math.ceil(step.integrationAttemptsTotalCount / (attemptPageSizeByStep[step.id] ?? 10)))}
-                </span>
-                <button
-                  className="btn btn-secondary"
-                  type="button"
-                  disabled={(attemptPageByStep[step.id] ?? 1) >= Math.max(1, Math.ceil(step.integrationAttemptsTotalCount / (attemptPageSizeByStep[step.id] ?? 10))) || loadingAttemptStepId === step.id}
-                  onClick={() => void loadStepAttempts(step.id, (attemptPageByStep[step.id] ?? 1) + 1, attemptPageSizeByStep[step.id] ?? 10)}
-                >
-                  Proxima
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         )}
       </div>
@@ -2583,7 +2655,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 aria-selected={journeyView === "diagram"}
                 onClick={() => setJourneyView("diagram")}
               >
-                Visão 2
+                Visão 1
               </button>
               <button
                 className={`view-toggle-btn ${journeyView === "timeline" ? "active" : ""}`}
@@ -2592,7 +2664,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                 aria-selected={journeyView === "timeline"}
                 onClick={() => setJourneyView("timeline")}
               >
-                Visão 1
+                Visão 2
               </button>
             </div>
           </div>

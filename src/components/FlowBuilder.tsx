@@ -1718,7 +1718,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
               aria-selected={builderView === "diagram"}
               onClick={() => setBuilderView("diagram")}
             >
-              Visao 2
+              Visao 1
             </button>
             <button
               className={`view-toggle-btn ${builderView === "list" ? "active" : ""}`}
@@ -1727,7 +1727,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
               aria-selected={builderView === "list"}
               onClick={() => setBuilderView("list")}
             >
-              Visao 1
+              Visao 2
             </button>
           </div>
           <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={addStep}>
