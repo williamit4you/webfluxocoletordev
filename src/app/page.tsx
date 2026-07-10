@@ -2,7 +2,7 @@
 
 import { Trail } from "@/components/Trail";
 import { api } from "@/lib/api";
-import type { Flow, Instance } from "@/lib/types";
+import type { DashboardInstancesResult, Flow, Instance } from "@/lib/types";
 import { Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -23,35 +23,93 @@ export default function DashboardPage() {
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
   const [startDate, setStartDate] = useState(searchParams.get("startDate") ?? "");
   const [statusFilter, setStatusFilter] = useState(searchParams.get("statusFilter") ?? "all");
-  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [inProgressCount, setInProgressCount] = useState(0);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [cancelledCount, setCancelledCount] = useState(0);
+  const [loadingFlows, setLoadingFlows] = useState(true);
+  const [loadingRows, setLoadingRows] = useState(false);
+  const [warning, setWarning] = useState("");
   const focusInstanceId = searchParams.get("focusInstance") ?? "";
   const focusedRowRef = useRef<HTMLTableRowElement | null>(null);
 
   useEffect(() => {
-    Promise.all([api<Flow[]>("/flows"), api<Instance[]>("/instances")])
-      .then(([loadedFlows, loadedRows]) => {
-        setFlows(loadedFlows);
+    api<Flow[]>("/flows")
+      .then(result => {
+        setFlows(result);
         const requestedFlowId = searchParams.get("flowId");
-        const resolvedFlowId = requestedFlowId && loadedFlows.some(flow => flow.id === requestedFlowId)
+        const resolvedFlowId = requestedFlowId && result.some(flow => flow.id === requestedFlowId)
           ? requestedFlowId
-          : loadedFlows[0]?.id ?? "";
+          : result[0]?.id ?? "";
         setFlowId(resolvedFlowId);
-        setRows(loadedRows);
       })
-      .finally(() => setLoading(false));
+      .catch(e => setWarning(e instanceof Error ? e.message : "Não foi possível carregar os fluxos."))
+      .finally(() => setLoadingFlows(false));
   }, [searchParams]);
 
-  const selectedFlow = flows.find(flow => flow.id === flowId);
-  const filtered = useMemo(() => {
-    const startDateValue = startDate ? new Date(`${startDate}T00:00:00`) : null;
-    const selectedFlowKey = selectedFlow?.flowKey;
+  useEffect(() => {
+    setPage(1);
+  }, [flowId, startDate, statusFilter, pageSize]);
 
-    return rows.filter(row =>
-      (selectedFlowKey ? row.flowKey === selectedFlowKey : row.flowDefinitionId === flowId) &&
-      (!search || row.code.toLowerCase().includes(search.toLowerCase())) &&
-      (!startDateValue || new Date(row.createdAt) >= startDateValue) &&
-      (statusFilter === "all" || String(row.status) === statusFilter));
-  }, [flowId, rows, search, selectedFlow?.flowKey, startDate, statusFilter]);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setPage(1);
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [search]);
+
+  useEffect(() => {
+    if (!flowId) {
+      setRows([]);
+      setTotalCount(0);
+      setInProgressCount(0);
+      setCompletedCount(0);
+      setCancelledCount(0);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setLoadingRows(true);
+      setWarning("");
+
+      const params = new URLSearchParams({
+        flowId,
+        page: String(page),
+        pageSize: String(pageSize)
+      });
+
+      if (statusFilter !== "all") {
+        params.set("status", statusFilter);
+      }
+
+      if (search.trim()) {
+        params.set("search", search.trim());
+      }
+
+      if (startDate) {
+        params.set("startDate", startDate);
+      }
+
+      api<DashboardInstancesResult>(`/instances/dashboard?${params.toString()}`)
+        .then(result => {
+          setRows(result.items);
+          setTotalCount(result.totalCount);
+          setInProgressCount(result.inProgressCount);
+          setCompletedCount(result.completedCount);
+          setCancelledCount(result.cancelledCount);
+        })
+        .catch(e => setWarning(e instanceof Error ? e.message : "Não foi possível carregar os registros."))
+        .finally(() => setLoadingRows(false));
+    }, search ? 300 : 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [flowId, page, pageSize, search, startDate, statusFilter]);
+
+  const selectedFlow = flows.find(flow => flow.id === flowId);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   useEffect(() => {
     if (!focusInstanceId || !focusedRowRef.current) {
@@ -59,7 +117,13 @@ export default function DashboardPage() {
     }
 
     focusedRowRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [focusInstanceId, filtered.length]);
+  }, [focusInstanceId, rows.length]);
+
+  const paginationLabel = useMemo(() => {
+    const start = totalCount === 0 ? 0 : ((page - 1) * pageSize) + 1;
+    const end = Math.min(page * pageSize, totalCount);
+    return `Exibindo ${start}-${end} de ${totalCount}`;
+  }, [page, pageSize, totalCount]);
 
   function buildExecutionHref(instanceId: string) {
     const params = new URLSearchParams();
@@ -98,12 +162,12 @@ export default function DashboardPage() {
       </div>
       <div className="card metric">
         <div className="label">Em andamento</div>
-        <div className="value">{filtered.filter(item => item.status === 0).length}</div>
+        <div className="value">{inProgressCount}</div>
         <div className="hint">neste fluxo</div>
       </div>
       <div className="card metric">
         <div className="label">Concluídos</div>
-        <div className="value">{filtered.filter(item => item.status === 1).length}</div>
+        <div className="value">{completedCount}</div>
         <div className="hint">neste fluxo</div>
       </div>
       <div className="card metric">
@@ -116,7 +180,7 @@ export default function DashboardPage() {
     <div className="card filters">
       <div className="field" style={{ minWidth: 260 }}>
         <label>Fluxo</label>
-        <select className="select" value={flowId} onChange={e => setFlowId(e.target.value)}>
+        <select className="select" value={flowId} onChange={e => setFlowId(e.target.value)} disabled={loadingFlows || flows.length === 0}>
           {flows.map(flow => <option key={flow.id} value={flow.id}>{flow.name}</option>)}
         </select>
       </div>
@@ -142,11 +206,13 @@ export default function DashboardPage() {
       </div>
     </div>
 
+    {warning && <div className="error" style={{ marginBottom: 16 }}>{warning}</div>}
+
     <div className="card tablewrap">
-      {loading && <div className="empty">Carregando operação...</div>}
-      {!loading && !flowId && <div className="empty">Nenhum fluxo disponível.</div>}
-      {!loading && flowId && filtered.length === 0 && <div className="empty"><strong>Nenhum registro encontrado.</strong><br />Inicie uma nova entrada para este fluxo.</div>}
-      {!loading && filtered.length > 0 &&
+      {(loadingFlows || loadingRows) && <div className="empty">Carregando operação...</div>}
+      {!loadingFlows && !flowId && <div className="empty">Nenhum fluxo disponível.</div>}
+      {!loadingRows && flowId && rows.length === 0 && <div className="empty"><strong>Nenhum registro encontrado.</strong><br />Inicie uma nova entrada para este fluxo.</div>}
+      {!loadingRows && rows.length > 0 && <>
         <table className="table">
           <thead>
             <tr>
@@ -157,7 +223,7 @@ export default function DashboardPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(row =>
+            {rows.map(row =>
               <tr
                 key={row.id}
                 ref={focusInstanceId === row.id ? element => {
@@ -179,7 +245,31 @@ export default function DashboardPage() {
                 <td>{new Date(row.updatedAt).toLocaleDateString("pt-BR")}</td>
               </tr>)}
           </tbody>
-        </table>}
+        </table>
+
+        <div className="pagination-bar">
+          <div className="pagination-actions">
+            <span className="pagination-page">{paginationLabel}</span>
+            <label className="pagination-size-control">
+              <span>Por página</span>
+              <select className="select" value={pageSize} onChange={event => setPageSize(Number(event.target.value))}>
+                <option value={10}>10</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </label>
+          </div>
+          <div className="pagination-actions">
+            <button className="btn btn-secondary" type="button" disabled={page <= 1 || loadingRows} onClick={() => setPage(current => current - 1)}>
+              Anterior
+            </button>
+            <span className="pagination-page">Página {page} de {totalPages}</span>
+            <button className="btn btn-secondary" type="button" disabled={page >= totalPages || loadingRows} onClick={() => setPage(current => current + 1)}>
+              Próxima
+            </button>
+          </div>
+        </div>
+      </>}
     </div>
   </>;
 }

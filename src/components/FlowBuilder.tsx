@@ -675,9 +675,11 @@ function AccordionSection({
             <h4>{title}</h4>
             {description && <p className="section-copy">{description}</p>}
           </div>
-          <span className="accordion-icon">{open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</span>
         </button>
         {actions && <div className="accordion-actions">{actions}</div>}
+        <button className="accordion-icon-btn" type="button" onClick={onToggle} aria-expanded={open} aria-label={open ? `Recolher ${title}` : `Expandir ${title}`}>
+          <span className="accordion-icon">{open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</span>
+        </button>
       </div>
       {open && <div className="accordion-content">{children}</div>}
     </section>
@@ -1575,38 +1577,38 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
       <div>
         <span className="eyebrow">Construtor</span>
         <h1 className="title">{flowId ? "Editar fluxo" : "Criar novo fluxo"}</h1>
-        <p className="subtitle">Cada etapa pode ter seus proprios campos, gatilhos e integracoes.</p>
+        <p className="subtitle">Cada etapa pode ter seus próprios campos, gatilhos e integrações.</p>
       </div>
       {flowId && <span className={`badge ${isDraft ? "inprogress" : "completed"}`}>v{flowVersion} - {isDraft ? "Rascunho" : "Publicado"}</span>}
     </div>
 
     {error && <div className="error">{error}</div>}
     {success && <div className="notice">{success}</div>}
-    {flowId && !isDraft && <div className="notice">Esta versao publicada esta protegida. Crie um rascunho para editar sem afetar as execucoes em andamento.</div>}
+    {flowId && !isDraft && <div className="notice">Esta versão publicada está protegida. Crie um rascunho para editar sem afetar as execuções em andamento.</div>}
 
     <section className="card formcard">
       <AccordionSection
-        title="Informacoes basicas"
-        description="Defina a identidade do fluxo e mantenha o cadastro ativo para a operacao."
+        title="Informações básicas"
+        description="Defina a identidade do fluxo e mantenha o cadastro ativo para a operação."
         open={openSections.flowBasics}
         onToggle={() => toggleSection("flowBasics")}
       >
         {flowId && (
           <div className="data-list flow-version-panel" style={{ padding: "0 0 20px" }}>
             <div className="data-item">
-              <small>Versao do fluxo</small>
+              <small>Versão do fluxo</small>
               <strong>v{flowVersion}</strong>
               <div className="section-copy" style={{ marginTop: 6 }}>
-                Esta e a versao exata usada para diferenciar configuracoes antigas e novas do mesmo fluxo.
+                Esta é a versão exata usada para diferenciar configurações antigas e novas do mesmo fluxo.
               </div>
             </div>
             <div className="data-item">
-              <small>Estado da versao</small>
+              <small>Estado da versão</small>
               <strong>{isDraft ? "Rascunho" : "Publicado"}</strong>
               <div className="section-copy" style={{ marginTop: 6 }}>
                 {isDraft
-                  ? "Alteracoes feitas aqui valem para esta versao de trabalho ate a publicacao."
-                  : "Esta versao publicada permanece como referencia do que ja estava valendo."}
+                  ? "Alterações feitas aqui valem para esta versão de trabalho até a publicação."
+                  : "Esta versão publicada permanece como referência do que já estava valendo."}
               </div>
             </div>
           </div>
@@ -1624,30 +1626,30 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
             </label>
           </div>
           <div className="field span2">
-            <label>Descricao</label>
+            <label>Descrição</label>
             <textarea className="textarea" value={description} onChange={e => setDescription(e.target.value)} disabled={!isDraft} />
           </div>
         </div>
       </AccordionSection>
 
       <AccordionSection
-        title="Usuarios do fluxo"
+        title="Usuários do fluxo"
         description="Quem estiver vinculado ao fluxo pode localizar e executar tarefas deste fluxo inteiro."
         open={openSections.flowUsers}
         onToggle={() => toggleSection("flowUsers")}
         soft
       >
         <div className="edit-panel" style={{ marginBottom: 0 }}>
-          {users.length === 0 && <div className="empty compact">Nenhum usuario disponivel para vincular.</div>}
+          {users.length === 0 && <div className="empty compact">Nenhum usuário disponível para vincular.</div>}
 
           {users.length > 0 && <>
-            <input className="input" placeholder="Buscar usuario no fluxo..." value={flowUserFilter} onChange={e => setFlowUserFilter(e.target.value)} disabled={!isDraft} />
+            <input className="input" placeholder="Buscar usuário no fluxo..." value={flowUserFilter} onChange={e => setFlowUserFilter(e.target.value)} disabled={!isDraft} />
             <div style={{ marginTop: 12, maxHeight: 220, overflow: "auto", border: "1px solid var(--line)", borderRadius: 12, padding: 10, display: "grid", gap: 8 }}>
               {filteredFlowUsers.map(user => <label key={user.id} className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: assignedUserIds.includes(user.id) ? "#eef7f2" : "#fff" }}>
                 <input type="checkbox" checked={assignedUserIds.includes(user.id)} onChange={() => toggleFlowUser(user.id)} disabled={!isDraft} />
                 {user.name} <small style={{ color: "var(--muted)" }}>{user.email}</small>
               </label>)}
-              {filteredFlowUsers.length === 0 && <div className="empty compact">Nenhum usuario encontrado.</div>}
+              {filteredFlowUsers.length === 0 && <div className="empty compact">Nenhum usuário encontrado.</div>}
             </div>
           </>}
         </div>
@@ -1655,7 +1657,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
 
       <AccordionSection
         title="Tokens do fluxo"
-        description="Cadastre credenciais reutilizaveis para as integracoes das etapas."
+        description="Cadastre credenciais reutilizáveis para as integrações das etapas."
         open={openSections.flowTokens}
         onToggle={() => toggleSection("flowTokens")}
         actions={<button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => setTokens(current => [...current, createToken()])}>
@@ -1736,11 +1738,11 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
 
       <AccordionSection
         title="Etapas sequenciais"
-        description="Use o lapis para abrir os campos e a configuracao especifica de cada etapa."
+        description="Use o lápis para abrir os campos e a configuração específica de cada etapa."
         open={openSections.flowSteps}
         onToggle={() => toggleSection("flowSteps")}
         actions={<div className="builder-toolbar">
-          <div className="view-toggle" role="tablist" aria-label="Modo de visualizacao das etapas">
+          <div className="view-toggle" role="tablist" aria-label="Modo de visualização das etapas">
             <button
               className={`view-toggle-btn ${builderView === "diagram" ? "active" : ""}`}
               type="button"
@@ -1748,7 +1750,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
               aria-selected={builderView === "diagram"}
               onClick={() => setBuilderView("diagram")}
             >
-              Visao 1
+              Visão 1
             </button>
             <button
               className={`view-toggle-btn ${builderView === "list" ? "active" : ""}`}
@@ -1757,7 +1759,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
               aria-selected={builderView === "list"}
               onClick={() => setBuilderView("list")}
             >
-              Visao 2
+              Visão 2
             </button>
           </div>
           <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={addStep}>
@@ -1809,7 +1811,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
             <div className="step-diagram-header">
               <div>
                 <h3 className="section-title">Mapa visual do fluxo</h3>
-                <p className="section-copy">Clique em qualquer etapa para abrir a configuracao completa abaixo. Voce tambem pode arrastar para reorganizar.</p>
+                <p className="section-copy">Clique em qualquer etapa para abrir a configuração completa abaixo. Você também pode arrastar para reorganizar.</p>
               </div>
             </div>
             <div className="step-diagram-scroll">
@@ -1867,7 +1869,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
 
           <AccordionSection
             title="Cadastro da etapa"
-            description="Defina nome, tipo, responsaveis e contexto geral desta etapa."
+            description="Defina nome, tipo, responsáveis e contexto geral desta etapa."
             open={openSections.stepBasics}
             onToggle={() => toggleSection("stepBasics")}
           >
@@ -1883,22 +1885,22 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                 </select>
               </div>
               <div className="field span2">
-                <label>Usuarios da etapa</label>
-                <input className="input" placeholder="Buscar usuario na etapa..." value={stepUserFilter} onChange={e => setStepUserFilter(e.target.value)} disabled={!isDraft} />
+                <label>Usuários da etapa</label>
+                <input className="input" placeholder="Buscar usuário na etapa..." value={stepUserFilter} onChange={e => setStepUserFilter(e.target.value)} disabled={!isDraft} />
                 <div style={{ maxHeight: 220, overflow: "auto", border: "1px solid var(--line)", borderRadius: 12, padding: 10, display: "grid", gap: 8 }}>
                   <label className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: currentStep.assignedUserIds.length === 0 ? "#eef7f2" : "#fff" }}>
                     <input type="checkbox" checked={currentStep.assignedUserIds.length === 0} onChange={() => updateStep(editingStep, { assignedUserIds: [] })} disabled={!isDraft} />
-                    Qualquer usuario com acesso ao fluxo
+                    Qualquer usuário com acesso ao fluxo
                   </label>
                   {filteredStepUsers.map(user => <label key={user.id} className="toggle-line compact" style={{ padding: "9px 12px", border: "1px solid var(--line)", borderRadius: 10, background: currentStep.assignedUserIds.includes(user.id) ? "#eef7f2" : "#fff" }}>
                     <input type="checkbox" checked={currentStep.assignedUserIds.includes(user.id)} onChange={() => toggleStepUser(user.id)} disabled={!isDraft} />
                     {user.name} <small style={{ color: "var(--muted)" }}>{user.email}</small>
                   </label>)}
-                  {filteredStepUsers.length === 0 && <div className="empty compact">Nenhum usuario encontrado.</div>}
+                  {filteredStepUsers.length === 0 && <div className="empty compact">Nenhum usuário encontrado.</div>}
                 </div>
               </div>
               <div className="field span2">
-                <label>Descricao</label>
+                <label>Descrição</label>
                 <textarea className="textarea" value={currentStep.description ?? ""} onChange={e => updateStep(editingStep, { description: e.target.value })} disabled={!isDraft} />
               </div>
             </div>

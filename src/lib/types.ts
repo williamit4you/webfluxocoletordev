@@ -19,5 +19,6 @@ export type IntegrationAttempt={id:string;triggerType:string;method:string;url:s
 export type IntegrationAttemptStatusFilter={statusCode?:number|null;count:number};
 export type PagedResult<T>={items:T[];totalCount:number;page:number;pageSize:number};
 export type PagedIntegrationAttemptResult={items:IntegrationAttempt[];totalCount:number;page:number;pageSize:number;availableStatusCodes:IntegrationAttemptStatusFilter[]};
+export type DashboardInstancesResult={items:Instance[];totalCount:number;page:number;pageSize:number;inProgressCount:number;completedCount:number;cancelledCount:number};
 export type Progress={id:string;flowStepId:string;name:string;order:number;type:number;status:number;startedAt?:string;completedAt?:string;completedByUserId?:string|null;completedByName?:string|null;notes?:string|null;isAutomatic:boolean;data:Record<string,unknown>;fields:ExecutionField[];integrationAttempts:IntegrationAttempt[];integrationAttemptsTotalCount:number;integrationAttemptStatusFilters:IntegrationAttemptStatusFilter[]};
 export type Instance={id:string;flowDefinitionId:string;flowKey:string;flowName:string;flowVersionNumber:number;flowLifecycleStatus:string;isCurrentFlowVersion:boolean;code:string;status:number;currentStepOrder:number;createdAt:string;updatedAt:string;data:Record<string,unknown>;currentStepExecutionId?:string|null;steps:Progress[]};

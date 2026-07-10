@@ -38,6 +38,17 @@
 .toast-card{width:min(360px,calc(100vw - 32px));padding:14px 16px;border-left:4px solid var(--danger);background:#fff;pointer-events:auto;animation:toast-in-out 2.6s ease forwards}
 .toast-card-success{border-color:var(--brand);box-shadow:0 18px 40px rgba(23,107,81,.14)}
 .toast-card-danger{border-color:var(--danger);box-shadow:0 18px 40px rgba(201,77,69,.14)}
+
+.accordion-trigger{justify-content:flex-start;flex:1}
+.accordion-icon-btn{display:grid;place-items:center;flex:0 0 auto;width:34px;height:34px;margin-right:18px;border:0;border-radius:999px;background:transparent;padding:0}
+.accordion-actions{padding:10px 0}
+
+@media(max-width:900px){
+  .accordion-header{flex-wrap:wrap;align-items:flex-start}
+  .accordion-trigger{width:calc(100% - 52px)}
+  .accordion-actions{width:100%;padding:0 18px 14px}
+  .accordion-icon-btn{margin:16px 18px 0 auto}
+}
 .toast-head{display:flex;align-items:flex-start;gap:12px}
 .toast-icon{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;flex:0 0 auto}
 .toast-icon-success{background:#e7f5ee;color:var(--brand)}
