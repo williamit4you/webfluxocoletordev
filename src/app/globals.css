@@ -112,5 +112,27 @@
  .step-list-accordion-actions{padding:0 18px 12px}
  .step-list-accordion strong,.step-list-accordion small{display:block}
  .step-list-accordion small{color:var(--muted);margin-top:4px}
- .step-editor-inline{margin:0 16px 16px}
- @media(max-width:900px){.step-list-accordion-head{flex-direction:column;align-items:flex-start}.step-list-accordion-trigger{width:100%}}
+.step-editor-inline{margin:0 16px 16px}
+@media(max-width:900px){.step-list-accordion-head{flex-direction:column;align-items:flex-start}.step-list-accordion-trigger{width:100%}}
+.fields-table-wrap{border:1px solid var(--line);border-radius:16px;background:#fcfefd}
+.fields-table th{background:#f5faf7}
+.fields-table td{vertical-align:top}
+.fields-table td .input,.fields-table td .select{min-width:120px}
+.fields-table-actions-col,.fields-table-actions-cell{text-align:center;white-space:nowrap}
+.fields-table-actions-cell .btn{padding:8px}
+.fields-table-subrow{padding:0!important;background:#fbfdfc}
+.fields-table-options{margin:0;border-top:0;padding:16px}
+@media(max-width:1100px){.fields-table{min-width:860px}}
+.entry-filter{display:flex;align-items:center;gap:10px;min-width:min(360px,100%);padding:0 12px;border:1px solid #d6dfda;border-radius:12px;background:#fff}
+.entry-filter .input{border:0;box-shadow:none;padding-inline:0}
+.entry-filter .input:focus{box-shadow:none}
+.entry-flow-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.entry-flow-card{padding:18px;text-align:left;display:grid;gap:10px;min-height:150px;transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease}
+.entry-flow-card:hover{transform:translateY(-1px);border-color:#c7ddd3}
+.entry-flow-card.selected{border-color:#91c4b0;box-shadow:0 0 0 3px #e2f4ec,var(--shadow)}
+.entry-flow-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.entry-flow-card strong{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:19px;line-height:1.24}
+.entry-flow-card small{color:var(--muted);font-size:13px;line-height:1.45}
+.entry-flow-selected{display:inline-flex;align-items:center;justify-content:center;padding:6px 10px;border-radius:999px;background:#eef7f2;color:var(--brand);font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+@media(max-width:1100px){.entry-flow-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.entry-filter{width:100%;min-width:0}.entry-flow-grid{grid-template-columns:1fr}}

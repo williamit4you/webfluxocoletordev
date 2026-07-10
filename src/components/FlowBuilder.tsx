@@ -1634,94 +1634,124 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
           </button>
         </div>}
       >
-        <div className="builder">
+        <>
           {step.fields.length === 0 && <div className="empty compact">Nenhum campo cadastrado nesta etapa.</div>}
-          {step.fields.map((field, fieldIndex) =>
-            <div className="field-block" key={`${field.id ?? "new"}-${fieldIndex}`}>
-              <div className="builder-row builder-row-field">
-                <input
-                  className="input"
-                  placeholder="Rotulo"
-                  value={field.label}
-                  onChange={e => updateField(stepIndex, fieldIndex, {
-                    label: e.target.value,
-                    key: buildAutoFieldKey(field.label, field.key, e.target.value)
-                  })}
-                  disabled={!isDraft}
-                />
-                <input className="input" placeholder="chave_do_campo" value={field.key} onChange={e => updateField(stepIndex, fieldIndex, { key: slugify(e.target.value) })} disabled={!isDraft} />
-                <select className="select" value={field.type} onChange={e => updateField(stepIndex, fieldIndex, {
-                  type: Number(e.target.value),
-                  mask: fieldSupportsMask(Number(e.target.value)) ? field.mask ?? "" : "",
-                  options: fieldSupportsOptions(Number(e.target.value)) ? (field.options.length ? field.options : [createOption(Number(e.target.value))]) : []
-                })} disabled={!isDraft}>
-                  {fieldTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                </select>
-                <select className="select" value={field.mask ?? ""} onChange={e => updateField(stepIndex, fieldIndex, { mask: e.target.value || "" })} disabled={!isDraft || !fieldSupportsMask(field.type)}>
-                  {maskOptions.map(option => <option key={option.value || "empty"} value={option.value}>{option.label}</option>)}
-                </select>
-                <label className="toggle-line compact">
-                  <input type="checkbox" checked={field.required} onChange={e => updateField(stepIndex, fieldIndex, { required: e.target.checked })} disabled={!isDraft} />
-                  Obrigatorio
-                </label>
-                <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateStep(stepIndex, { fields: step.fields.filter((_, currentFieldIndex) => currentFieldIndex !== fieldIndex) })}>
-                  <Trash2 size={16} />
-                </button>
-              </div>
-
-              {fieldSupportsOptions(field.type) && <div className="options-box">
-                <div className="section-header">
-                  <div>
-                    <h4>{field.type === 8 ? "Opcoes do radio" : "Campos da lista"}</h4>
-                    <p className="section-copy">{field.type === 8 ? "Cadastre as opcoes exibidas como selecao unica em botoes." : "A lista pode usar os mesmos tipos do campo principal, exceto outra lista aninhada."}</p>
-                  </div>
-                  <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => updateField(stepIndex, fieldIndex, { options: [...field.options, createOption(field.type)] })}>
-                    <Plus size={14} />
-                    {field.type === 8 ? "Nova opcao" : "Novo campo"}
-                  </button>
-                </div>
-                {field.options.map((option, optionIndex) => field.type === 8
-                  ? <div className="builder-row option-row" key={`${option.id ?? "new"}-${optionIndex}`}>
-                    <input className="input" placeholder="Nome da opcao" value={option.label} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { label: e.target.value })} disabled={!isDraft} />
-                    <input className="input" placeholder="Valor enviado" value={option.value} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { value: e.target.value })} disabled={!isDraft} />
-                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateField(stepIndex, fieldIndex, { options: field.options.filter((_, currentOptionIndex) => currentOptionIndex !== optionIndex) })}>
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                  : <div className="builder-row builder-row-field" key={`${option.id ?? "new"}-${optionIndex}`}>
-                    <input
-                      className="input"
-                      placeholder="Rotulo"
-                      value={option.label}
-                      onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, {
-                        label: e.target.value,
-                        key: buildAutoFieldKey(option.label, option.key ?? option.value ?? "", e.target.value),
-                        value: buildAutoFieldKey(option.label, option.key ?? option.value ?? "", e.target.value)
-                      })}
-                      disabled={!isDraft}
-                    />
-                    <input className="input" placeholder="chave_do_campo" value={option.key ?? option.value ?? ""} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { key: slugify(e.target.value), value: slugify(e.target.value) })} disabled={!isDraft} />
-                    <select className="select" value={option.type ?? ""} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, {
-                      type: e.target.value ? Number(e.target.value) : null,
-                      mask: e.target.value && fieldSupportsMask(Number(e.target.value)) ? option.mask ?? "" : ""
-                    })} disabled={!isDraft}>
-                      <option value="">Tipo</option>
-                      {listFieldTypeOptions.map(typeOption => <option key={typeOption.value} value={typeOption.value}>{typeOption.label}</option>)}
-                    </select>
-                    <select className="select" value={option.mask ?? ""} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { mask: e.target.value || "" })} disabled={!isDraft || !fieldSupportsMask(option.type ?? -1)}>
-                      {maskOptions.map(maskOption => <option key={maskOption.value || "empty"} value={maskOption.value}>{maskOption.label}</option>)}
-                    </select>
-                    <label className="toggle-line compact">
-                      <input type="checkbox" checked={option.required ?? false} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { required: e.target.checked })} disabled={!isDraft} />
-                      Obrigatorio
-                    </label>
-                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateField(stepIndex, fieldIndex, { options: field.options.filter((_, currentOptionIndex) => currentOptionIndex !== optionIndex) })}>
-                      <Trash2 size={15} />
-                    </button>
-                  </div>)}
-              </div>}
-            </div>)}
-        </div>
+          {step.fields.length > 0 && <div className="tablewrap fields-table-wrap">
+            <table className="table fields-table">
+              <thead>
+                <tr>
+                  <th>Rótulo</th>
+                  <th>Chave</th>
+                  <th>Tipo</th>
+                  <th>Máscara</th>
+                  <th>Obrigatório</th>
+                  <th className="fields-table-actions-col">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {step.fields.map((field, fieldIndex) => <>
+                  <tr key={`${field.id ?? "new"}-${fieldIndex}`}>
+                    <td>
+                      <input
+                        className="input"
+                        placeholder="Rotulo"
+                        value={field.label}
+                        onChange={e => updateField(stepIndex, fieldIndex, {
+                          label: e.target.value,
+                          key: buildAutoFieldKey(field.label, field.key, e.target.value)
+                        })}
+                        disabled={!isDraft}
+                      />
+                    </td>
+                    <td>
+                      <input className="input" placeholder="chave_do_campo" value={field.key} onChange={e => updateField(stepIndex, fieldIndex, { key: slugify(e.target.value) })} disabled={!isDraft} />
+                    </td>
+                    <td>
+                      <select className="select" value={field.type} onChange={e => updateField(stepIndex, fieldIndex, {
+                        type: Number(e.target.value),
+                        mask: fieldSupportsMask(Number(e.target.value)) ? field.mask ?? "" : "",
+                        options: fieldSupportsOptions(Number(e.target.value)) ? (field.options.length ? field.options : [createOption(Number(e.target.value))]) : []
+                      })} disabled={!isDraft}>
+                        {fieldTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    </td>
+                    <td>
+                      <select className="select" value={field.mask ?? ""} onChange={e => updateField(stepIndex, fieldIndex, { mask: e.target.value || "" })} disabled={!isDraft || !fieldSupportsMask(field.type)}>
+                        {maskOptions.map(option => <option key={option.value || "empty"} value={option.value}>{option.label}</option>)}
+                      </select>
+                    </td>
+                    <td>
+                      <label className="toggle-line compact">
+                        <input type="checkbox" checked={field.required} onChange={e => updateField(stepIndex, fieldIndex, { required: e.target.checked })} disabled={!isDraft} />
+                        Obrigatório
+                      </label>
+                    </td>
+                    <td className="fields-table-actions-cell">
+                      <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateStep(stepIndex, { fields: step.fields.filter((_, currentFieldIndex) => currentFieldIndex !== fieldIndex) })}>
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                  {fieldSupportsOptions(field.type) && <tr key={`${field.id ?? "new"}-${fieldIndex}-options`}>
+                    <td colSpan={6} className="fields-table-subrow">
+                      <div className="options-box fields-table-options">
+                        <div className="section-header">
+                          <div>
+                            <h4>{field.type === 8 ? "Opcoes do radio" : "Campos da lista"}</h4>
+                            <p className="section-copy">{field.type === 8 ? "Cadastre as opcoes exibidas como selecao unica em botoes." : "A lista pode usar os mesmos tipos do campo principal, exceto outra lista aninhada."}</p>
+                          </div>
+                          <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => updateField(stepIndex, fieldIndex, { options: [...field.options, createOption(field.type)] })}>
+                            <Plus size={14} />
+                            {field.type === 8 ? "Nova opcao" : "Novo campo"}
+                          </button>
+                        </div>
+                        {field.options.map((option, optionIndex) => field.type === 8
+                          ? <div className="builder-row option-row" key={`${option.id ?? "new"}-${optionIndex}`}>
+                            <input className="input" placeholder="Nome da opcao" value={option.label} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { label: e.target.value })} disabled={!isDraft} />
+                            <input className="input" placeholder="Valor enviado" value={option.value} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { value: e.target.value })} disabled={!isDraft} />
+                            <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateField(stepIndex, fieldIndex, { options: field.options.filter((_, currentOptionIndex) => currentOptionIndex !== optionIndex) })}>
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                          : <div className="builder-row builder-row-field" key={`${option.id ?? "new"}-${optionIndex}`}>
+                            <input
+                              className="input"
+                              placeholder="Rotulo"
+                              value={option.label}
+                              onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, {
+                                label: e.target.value,
+                                key: buildAutoFieldKey(option.label, option.key ?? option.value ?? "", e.target.value),
+                                value: buildAutoFieldKey(option.label, option.key ?? option.value ?? "", e.target.value)
+                              })}
+                              disabled={!isDraft}
+                            />
+                            <input className="input" placeholder="chave_do_campo" value={option.key ?? option.value ?? ""} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { key: slugify(e.target.value), value: slugify(e.target.value) })} disabled={!isDraft} />
+                            <select className="select" value={option.type ?? ""} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, {
+                              type: e.target.value ? Number(e.target.value) : null,
+                              mask: e.target.value && fieldSupportsMask(Number(e.target.value)) ? option.mask ?? "" : ""
+                            })} disabled={!isDraft}>
+                              <option value="">Tipo</option>
+                              {listFieldTypeOptions.map(typeOption => <option key={typeOption.value} value={typeOption.value}>{typeOption.label}</option>)}
+                            </select>
+                            <select className="select" value={option.mask ?? ""} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { mask: e.target.value || "" })} disabled={!isDraft || !fieldSupportsMask(option.type ?? -1)}>
+                              {maskOptions.map(maskOption => <option key={maskOption.value || "empty"} value={maskOption.value}>{maskOption.label}</option>)}
+                            </select>
+                            <label className="toggle-line compact">
+                              <input type="checkbox" checked={option.required ?? false} onChange={e => updateOption(stepIndex, fieldIndex, optionIndex, { required: e.target.checked })} disabled={!isDraft} />
+                              Obrigatorio
+                            </label>
+                            <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateField(stepIndex, fieldIndex, { options: field.options.filter((_, currentOptionIndex) => currentOptionIndex !== optionIndex) })}>
+                              <Trash2 size={15} />
+                            </button>
+                          </div>)}
+                      </div>
+                    </td>
+                  </tr>}
+                </>)}
+              </tbody>
+            </table>
+          </div>}
+        </>
       </AccordionSection>
 
       {step.type === 3 && <AccordionSection
@@ -2429,94 +2459,124 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
               </button>
             </div>}
           >
-            <div className="builder">
+            <>
               {currentStep.fields.length === 0 && <div className="empty compact">Nenhum campo cadastrado nesta etapa.</div>}
-              {currentStep.fields.map((field, fieldIndex) =>
-                <div className="field-block" key={`${field.id ?? "new"}-${fieldIndex}`}>
-                  <div className="builder-row builder-row-field">
-                    <input
-                      className="input"
-                      placeholder="Rotulo"
-                      value={field.label}
-                      onChange={e => updateField(editingStep, fieldIndex, {
-                        label: e.target.value,
-                        key: buildAutoFieldKey(field.label, field.key, e.target.value)
-                      })}
-                      disabled={!isDraft}
-                    />
-                    <input className="input" placeholder="chave_do_campo" value={field.key} onChange={e => updateField(editingStep, fieldIndex, { key: slugify(e.target.value) })} disabled={!isDraft} />
-                    <select className="select" value={field.type} onChange={e => updateField(editingStep, fieldIndex, {
-                      type: Number(e.target.value),
-                      mask: fieldSupportsMask(Number(e.target.value)) ? field.mask ?? "" : "",
-                      options: fieldSupportsOptions(Number(e.target.value)) ? (field.options.length ? field.options : [createOption(Number(e.target.value))]) : []
-                    })} disabled={!isDraft}>
-                      {fieldTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                    </select>
-                    <select className="select" value={field.mask ?? ""} onChange={e => updateField(editingStep, fieldIndex, { mask: e.target.value || "" })} disabled={!isDraft || !fieldSupportsMask(field.type)}>
-                      {maskOptions.map(option => <option key={option.value || "empty"} value={option.value}>{option.label}</option>)}
-                    </select>
-                    <label className="toggle-line compact">
-                      <input type="checkbox" checked={field.required} onChange={e => updateField(editingStep, fieldIndex, { required: e.target.checked })} disabled={!isDraft} />
-                      Obrigatorio
-                    </label>
-                    <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateStep(editingStep, { fields: currentStep.fields.filter((_, currentFieldIndex) => currentFieldIndex !== fieldIndex) })}>
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-
-                  {fieldSupportsOptions(field.type) && <div className="options-box">
-                    <div className="section-header">
-                    <div>
-                        <h4>{field.type === 8 ? "Opcoes do radio" : "Campos da lista"}</h4>
-                        <p className="section-copy">{field.type === 8 ? "Cadastre as opcoes exibidas como selecao unica em botoes." : "A lista pode usar os mesmos tipos do campo principal, exceto outra lista aninhada."}</p>
-                      </div>
-                      <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => updateField(editingStep, fieldIndex, { options: [...field.options, createOption(field.type)] })}>
-                        <Plus size={14} />
-                        {field.type === 8 ? "Nova opcao" : "Novo campo"}
-                      </button>
-                    </div>
-                    {field.options.map((option, optionIndex) => field.type === 8
-                      ? <div className="builder-row option-row" key={`${option.id ?? "new"}-${optionIndex}`}>
-                        <input className="input" placeholder="Nome da opcao" value={option.label} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, { label: e.target.value })} disabled={!isDraft} />
-                        <input className="input" placeholder="Valor enviado" value={option.value} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, { value: e.target.value })} disabled={!isDraft} />
-                        <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateField(editingStep, fieldIndex, { options: field.options.filter((_, currentOptionIndex) => currentOptionIndex !== optionIndex) })}>
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                      : <div className="builder-row builder-row-field" key={`${option.id ?? "new"}-${optionIndex}`}>
-                        <input
-                          className="input"
-                          placeholder="Rotulo"
-                          value={option.label}
-                          onChange={e => updateOption(editingStep, fieldIndex, optionIndex, {
-                            label: e.target.value,
-                            key: buildAutoFieldKey(option.label, option.key ?? option.value ?? "", e.target.value),
-                            value: buildAutoFieldKey(option.label, option.key ?? option.value ?? "", e.target.value)
-                          })}
-                          disabled={!isDraft}
-                        />
-                        <input className="input" placeholder="chave_do_campo" value={option.key ?? option.value ?? ""} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, { key: slugify(e.target.value), value: slugify(e.target.value) })} disabled={!isDraft} />
-                        <select className="select" value={option.type ?? ""} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, {
-                          type: e.target.value ? Number(e.target.value) : null,
-                          mask: e.target.value && fieldSupportsMask(Number(e.target.value)) ? option.mask ?? "" : ""
-                        })} disabled={!isDraft}>
-                          <option value="">Tipo</option>
-                          {listFieldTypeOptions.map(typeOption => <option key={typeOption.value} value={typeOption.value}>{typeOption.label}</option>)}
-                        </select>
-                        <select className="select" value={option.mask ?? ""} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, { mask: e.target.value || "" })} disabled={!isDraft || !fieldSupportsMask(option.type ?? -1)}>
-                          {maskOptions.map(maskOption => <option key={maskOption.value || "empty"} value={maskOption.value}>{maskOption.label}</option>)}
-                        </select>
-                        <label className="toggle-line compact">
-                          <input type="checkbox" checked={option.required ?? false} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, { required: e.target.checked })} disabled={!isDraft} />
-                          Obrigatorio
-                        </label>
-                        <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateField(editingStep, fieldIndex, { options: field.options.filter((_, currentOptionIndex) => currentOptionIndex !== optionIndex) })}>
-                          <Trash2 size={15} />
-                        </button>
-                      </div>)}
-                  </div>}
-                </div>)}
-            </div>
+              {currentStep.fields.length > 0 && <div className="tablewrap fields-table-wrap">
+                <table className="table fields-table">
+                  <thead>
+                    <tr>
+                      <th>Rótulo</th>
+                      <th>Chave</th>
+                      <th>Tipo</th>
+                      <th>Máscara</th>
+                      <th>Obrigatório</th>
+                      <th className="fields-table-actions-col">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentStep.fields.map((field, fieldIndex) => <>
+                      <tr key={`${field.id ?? "new"}-${fieldIndex}`}>
+                        <td>
+                          <input
+                            className="input"
+                            placeholder="Rotulo"
+                            value={field.label}
+                            onChange={e => updateField(editingStep, fieldIndex, {
+                              label: e.target.value,
+                              key: buildAutoFieldKey(field.label, field.key, e.target.value)
+                            })}
+                            disabled={!isDraft}
+                          />
+                        </td>
+                        <td>
+                          <input className="input" placeholder="chave_do_campo" value={field.key} onChange={e => updateField(editingStep, fieldIndex, { key: slugify(e.target.value) })} disabled={!isDraft} />
+                        </td>
+                        <td>
+                          <select className="select" value={field.type} onChange={e => updateField(editingStep, fieldIndex, {
+                            type: Number(e.target.value),
+                            mask: fieldSupportsMask(Number(e.target.value)) ? field.mask ?? "" : "",
+                            options: fieldSupportsOptions(Number(e.target.value)) ? (field.options.length ? field.options : [createOption(Number(e.target.value))]) : []
+                          })} disabled={!isDraft}>
+                            {fieldTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                          </select>
+                        </td>
+                        <td>
+                          <select className="select" value={field.mask ?? ""} onChange={e => updateField(editingStep, fieldIndex, { mask: e.target.value || "" })} disabled={!isDraft || !fieldSupportsMask(field.type)}>
+                            {maskOptions.map(option => <option key={option.value || "empty"} value={option.value}>{option.label}</option>)}
+                          </select>
+                        </td>
+                        <td>
+                          <label className="toggle-line compact">
+                            <input type="checkbox" checked={field.required} onChange={e => updateField(editingStep, fieldIndex, { required: e.target.checked })} disabled={!isDraft} />
+                            Obrigatório
+                          </label>
+                        </td>
+                        <td className="fields-table-actions-cell">
+                          <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateStep(editingStep, { fields: currentStep.fields.filter((_, currentFieldIndex) => currentFieldIndex !== fieldIndex) })}>
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                      {fieldSupportsOptions(field.type) && <tr key={`${field.id ?? "new"}-${fieldIndex}-options`}>
+                        <td colSpan={6} className="fields-table-subrow">
+                          <div className="options-box fields-table-options">
+                            <div className="section-header">
+                              <div>
+                                <h4>{field.type === 8 ? "Opcoes do radio" : "Campos da lista"}</h4>
+                                <p className="section-copy">{field.type === 8 ? "Cadastre as opcoes exibidas como selecao unica em botoes." : "A lista pode usar os mesmos tipos do campo principal, exceto outra lista aninhada."}</p>
+                              </div>
+                              <button className="btn btn-secondary" type="button" disabled={!isDraft} onClick={() => updateField(editingStep, fieldIndex, { options: [...field.options, createOption(field.type)] })}>
+                                <Plus size={14} />
+                                {field.type === 8 ? "Nova opcao" : "Novo campo"}
+                              </button>
+                            </div>
+                            {field.options.map((option, optionIndex) => field.type === 8
+                              ? <div className="builder-row option-row" key={`${option.id ?? "new"}-${optionIndex}`}>
+                                <input className="input" placeholder="Nome da opcao" value={option.label} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, { label: e.target.value })} disabled={!isDraft} />
+                                <input className="input" placeholder="Valor enviado" value={option.value} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, { value: e.target.value })} disabled={!isDraft} />
+                                <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateField(editingStep, fieldIndex, { options: field.options.filter((_, currentOptionIndex) => currentOptionIndex !== optionIndex) })}>
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                              : <div className="builder-row builder-row-field" key={`${option.id ?? "new"}-${optionIndex}`}>
+                                <input
+                                  className="input"
+                                  placeholder="Rotulo"
+                                  value={option.label}
+                                  onChange={e => updateOption(editingStep, fieldIndex, optionIndex, {
+                                    label: e.target.value,
+                                    key: buildAutoFieldKey(option.label, option.key ?? option.value ?? "", e.target.value),
+                                    value: buildAutoFieldKey(option.label, option.key ?? option.value ?? "", e.target.value)
+                                  })}
+                                  disabled={!isDraft}
+                                />
+                                <input className="input" placeholder="chave_do_campo" value={option.key ?? option.value ?? ""} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, { key: slugify(e.target.value), value: slugify(e.target.value) })} disabled={!isDraft} />
+                                <select className="select" value={option.type ?? ""} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, {
+                                  type: e.target.value ? Number(e.target.value) : null,
+                                  mask: e.target.value && fieldSupportsMask(Number(e.target.value)) ? option.mask ?? "" : ""
+                                })} disabled={!isDraft}>
+                                  <option value="">Tipo</option>
+                                  {listFieldTypeOptions.map(typeOption => <option key={typeOption.value} value={typeOption.value}>{typeOption.label}</option>)}
+                                </select>
+                                <select className="select" value={option.mask ?? ""} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, { mask: e.target.value || "" })} disabled={!isDraft || !fieldSupportsMask(option.type ?? -1)}>
+                                  {maskOptions.map(maskOption => <option key={maskOption.value || "empty"} value={maskOption.value}>{maskOption.label}</option>)}
+                                </select>
+                                <label className="toggle-line compact">
+                                  <input type="checkbox" checked={option.required ?? false} onChange={e => updateOption(editingStep, fieldIndex, optionIndex, { required: e.target.checked })} disabled={!isDraft} />
+                                  Obrigatorio
+                                </label>
+                                <button className="btn btn-ghost" type="button" disabled={!isDraft} onClick={() => updateField(editingStep, fieldIndex, { options: field.options.filter((_, currentOptionIndex) => currentOptionIndex !== optionIndex) })}>
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>)}
+                          </div>
+                        </td>
+                      </tr>}
+                    </>)}
+                  </tbody>
+                </table>
+              </div>}
+            </>
           </AccordionSection>
 
           {currentStep.type === 3 && <AccordionSection

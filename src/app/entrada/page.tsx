@@ -2,7 +2,7 @@
 
 import { api } from "@/lib/api";
 import type { Flow, Instance } from "@/lib/types";
-import { Play, ShieldAlert } from "lucide-react";
+import { Play, Search, ShieldAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -14,6 +14,7 @@ type EntryToastState = {
 export default function EntryPage() {
   const [flows, setFlows] = useState<Flow[]>([]);
   const [flowId, setFlowId] = useState("");
+  const [flowFilter, setFlowFilter] = useState("");
   const [warning, setWarning] = useState("");
   const [toast, setToast] = useState<EntryToastState | null>(null);
   const [creating, setCreating] = useState(false);
@@ -30,8 +31,25 @@ export default function EntryPage() {
       .catch(e => setWarning(e instanceof Error ? e.message : "Nao foi possivel carregar os fluxos."));
   }, []);
 
+  const filteredFlows = flows.filter(item =>
+    item.name.toLowerCase().includes(flowFilter.toLowerCase()) ||
+    item.description.toLowerCase().includes(flowFilter.toLowerCase())
+  );
   const flow = flows.find(item => item.id === flowId);
   const firstStep = flow?.steps[0];
+
+  useEffect(() => {
+    if (filteredFlows.length === 0) {
+      if (flowId) {
+        setFlowId("");
+      }
+      return;
+    }
+
+    if (!filteredFlows.some(item => item.id === flowId)) {
+      setFlowId(filteredFlows[0].id);
+    }
+  }, [filteredFlows, flowId]);
 
   useEffect(() => {
     if (!toast) {
@@ -106,17 +124,47 @@ export default function EntryPage() {
     </div>
 
     <section className="card formcard">
-      <div className="formgrid">
-        <div className="field span2">
-          <label>Fluxo *</label>
-          <select className="select" value={flowId} onChange={e => setFlowId(e.target.value)}>
-            {flows.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
+      <div className="section-header" style={{ marginBottom: 18 }}>
+        <div>
+          <h2 className="section-title">Escolha o fluxo</h2>
+          <p className="section-copy">Use o filtro para localizar rapidamente o processo desejado e iniciar uma nova entrada.</p>
+        </div>
+        <div className="entry-filter">
+          <Search size={16} />
+          <input
+            className="input"
+            placeholder="Filtrar fluxos por nome..."
+            value={flowFilter}
+            onChange={e => setFlowFilter(e.target.value)}
+          />
         </div>
       </div>
 
+      {filteredFlows.length === 0 && <div className="empty compact">Nenhum fluxo encontrado com esse filtro.</div>}
+
+      {filteredFlows.length > 0 && <div className="entry-flow-grid">
+        {filteredFlows.map(item => {
+          const itemFirstStep = item.steps[0];
+          const isSelected = item.id === flowId;
+
+          return <button
+            key={item.id}
+            type="button"
+            className={`entry-flow-card card ${isSelected ? "selected" : ""}`}
+            onClick={() => setFlowId(item.id)}
+          >
+            <div className="entry-flow-card-head">
+              <span className={`badge ${item.active ? "completed" : "cancelled"}`}>{item.active ? "Ativo" : "Inativo"}</span>
+              {isSelected && <span className="entry-flow-selected">Selecionado</span>}
+            </div>
+            <strong>{item.name}</strong>
+            <small>{itemFirstStep ? `Primeira etapa: ${itemFirstStep.name}` : "Sem etapa inicial cadastrada"}</small>
+          </button>;
+        })}
+      </div>}
+
       {firstStep && <div className="notice" style={{ marginTop: 18 }}>
-        Primeira etapa: <strong>{firstStep.name}</strong>
+        Fluxo selecionado: <strong>{flow?.name}</strong> {firstStep ? <>• Primeira etapa: <strong>{firstStep.name}</strong></> : null}
       </div>}
 
       {warning && <div className="error" style={{ marginTop: 15 }}>{warning}</div>}
