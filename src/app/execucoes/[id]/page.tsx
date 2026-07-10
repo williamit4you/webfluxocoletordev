@@ -2,7 +2,7 @@
 
 import { api } from "@/lib/api";
 import { readDanfeInBrowser as readDanfeFileInBrowser } from "@/lib/danfeReader";
-import type { ExecutionField, FieldOption, Flow, Instance, StepApiConfig } from "@/lib/types";
+import type { ExecutionField, FieldOption, Flow, Instance, IntegrationAttempt, PagedResult, StepApiConfig } from "@/lib/types";
 import { ArrowLeft, Camera, Check, ChevronDown, ChevronUp, Clock, LoaderCircle, Paperclip, Play, RotateCw, Save, ShieldAlert, Square } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -1558,6 +1558,9 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const [cancelingStepId, setCancelingStepId] = useState("");
   const [expandedSteps, setExpandedSteps] = useState<Record<string, boolean>>({});
   const [expandedAttemptIds, setExpandedAttemptIds] = useState<Record<string, boolean>>({});
+  const [attemptPageByStep, setAttemptPageByStep] = useState<Record<string, number>>({});
+  const [attemptPageSizeByStep, setAttemptPageSizeByStep] = useState<Record<string, number>>({});
+  const [loadingAttemptStepId, setLoadingAttemptStepId] = useState("");
   const [journeyView, setJourneyView] = useState<"timeline" | "diagram">("diagram");
   const [readerWarning, setReaderWarning] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -1600,6 +1603,8 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const load = (reason: "view" | "advance" = "view") => api<Instance>(`/instances/${id}`)
     .then(async result => {
       syncCurrentStepState(result, setItem, setFormData, setNotes);
+      setAttemptPageByStep(Object.fromEntries(result.steps.map(step => [step.id, 1])));
+      setAttemptPageSizeByStep(Object.fromEntries(result.steps.map(step => [step.id, 10])));
       try {
         setFlowDefinition(await api<Flow>(`/flows/${result.flowDefinitionId}`));
       } catch {
@@ -1613,6 +1618,42 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
       setError(e.message);
     });
+
+  function applyStepAttempts(stepId: string, paged: PagedResult<IntegrationAttempt>) {
+    setItem(current => current
+      ? {
+        ...current,
+        steps: current.steps.map(step => step.id === stepId
+          ? {
+            ...step,
+            integrationAttempts: paged.items,
+            integrationAttemptsTotalCount: paged.totalCount
+          }
+          : step)
+      }
+      : current);
+  }
+
+  async function loadStepAttempts(stepId: string, page: number, pageSize: number) {
+    setLoadingAttemptStepId(stepId);
+    setError("");
+
+    try {
+      const paged = await api<PagedResult<IntegrationAttempt>>(`/instances/${id}/steps/${stepId}/integration-attempts?page=${page}&pageSize=${pageSize}`);
+      applyStepAttempts(stepId, paged);
+      setAttemptPageByStep(current => ({ ...current, [stepId]: paged.page }));
+      setAttemptPageSizeByStep(current => ({ ...current, [stepId]: paged.pageSize }));
+      setExpandedAttemptIds({});
+    } catch (e) {
+      if (handleForbiddenRedirect(e)) {
+        return;
+      }
+
+      setError(e instanceof Error ? e.message : "Nao foi possivel carregar as integracoes da etapa.");
+    } finally {
+      setLoadingAttemptStepId("");
+    }
+  }
 
   useEffect(() => {
     void load("view");
@@ -1869,7 +1910,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
           </div>
         )}
 
-        {step.integrationAttempts.length > 0 && (
+        {(step.integrationAttemptsTotalCount > 0 || step.integrationAttempts.length > 0) && (
           <div style={{ marginTop: 14 }}>
             <strong>Integrações da etapa</strong>
             <div className="tablewrap integration-attempts-wrap" style={{ marginTop: 10, border: "1px solid var(--line)", borderRadius: 16 }}>
@@ -1960,6 +2001,51 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                   })}
                 </tbody>
               </table>
+            </div>
+            <div className="pagination-bar">
+              <div className="pagination-actions">
+                <span className="pagination-page">
+                  {(() => {
+                    const currentPage = attemptPageByStep[step.id] ?? 1;
+                    const pageSize = attemptPageSizeByStep[step.id] ?? 10;
+                    const start = step.integrationAttemptsTotalCount === 0 ? 0 : ((currentPage - 1) * pageSize) + 1;
+                    const end = Math.min(currentPage * pageSize, step.integrationAttemptsTotalCount);
+                    return `Exibindo ${start}-${end} de ${step.integrationAttemptsTotalCount}`;
+                  })()}
+                </span>
+                <select
+                  className="select"
+                  style={{ width: 120 }}
+                  value={attemptPageSizeByStep[step.id] ?? 10}
+                  onChange={event => void loadStepAttempts(step.id, 1, Number(event.target.value))}
+                  disabled={loadingAttemptStepId === step.id}
+                >
+                  <option value={10}>10 por pagina</option>
+                  <option value={50}>50 por pagina</option>
+                  <option value={100}>100 por pagina</option>
+                </select>
+              </div>
+              <div className="pagination-actions">
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  disabled={(attemptPageByStep[step.id] ?? 1) <= 1 || loadingAttemptStepId === step.id}
+                  onClick={() => void loadStepAttempts(step.id, (attemptPageByStep[step.id] ?? 1) - 1, attemptPageSizeByStep[step.id] ?? 10)}
+                >
+                  Anterior
+                </button>
+                <span className="pagination-page">
+                  Pagina {attemptPageByStep[step.id] ?? 1} de {Math.max(1, Math.ceil(step.integrationAttemptsTotalCount / (attemptPageSizeByStep[step.id] ?? 10)))}
+                </span>
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  disabled={(attemptPageByStep[step.id] ?? 1) >= Math.max(1, Math.ceil(step.integrationAttemptsTotalCount / (attemptPageSizeByStep[step.id] ?? 10))) || loadingAttemptStepId === step.id}
+                  onClick={() => void loadStepAttempts(step.id, (attemptPageByStep[step.id] ?? 1) + 1, attemptPageSizeByStep[step.id] ?? 10)}
+                >
+                  Proxima
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -2494,7 +2580,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                           <small>{actorLabel}</small>
                           <div className="step-meta">
                             <span>Etapa {step.order}</span>
-                            {step.integrationAttempts.length > 0 && <span>Integração</span>}
+                            {step.integrationAttemptsTotalCount > 0 && <span>Integração</span>}
                           </div>
                         </button>
 
