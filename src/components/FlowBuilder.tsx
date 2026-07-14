@@ -219,6 +219,9 @@ function createResponseRule(): ResponseRule {
     onMismatchBehavior: "retry",
     retryIntervalMinutes: 3,
     maxAttempts: 20,
+    transportErrorBehavior: "fail",
+    transportRetryIntervalMinutes: 3,
+    transportMaxAttempts: 20,
     failureBehavior: "fail",
     description: ""
   };
@@ -234,19 +237,30 @@ function normalizeResponseRule(config?: StepApiConfig | null): ResponseRule {
     emptyBehavior: config?.responseRule?.emptyBehavior ?? config?.emptyArrayAction ?? (legacyRetry ? "retry" : "advance"),
     onMatchBehavior: config?.responseRule?.onMatchBehavior ?? config?.responseRule?.nonEmptyBehavior ?? "advance",
     onMismatchBehavior: config?.responseRule?.onMismatchBehavior ?? config?.responseRule?.emptyBehavior ?? config?.emptyArrayAction ?? (legacyRetry ? "retry" : "advance"),
-    retryIntervalMinutes: config?.responseRule?.retryIntervalMinutes ?? config?.emptyArrayRetryMinutes ?? 3
+    retryIntervalMinutes: config?.responseRule?.retryIntervalMinutes ?? config?.emptyArrayRetryMinutes ?? 3,
+    transportErrorBehavior: config?.responseRule?.transportErrorBehavior ?? "fail",
+    transportRetryIntervalMinutes: config?.responseRule?.transportRetryIntervalMinutes ?? config?.responseRule?.retryIntervalMinutes ?? config?.emptyArrayRetryMinutes ?? 3,
+    transportMaxAttempts: config?.responseRule?.transportMaxAttempts ?? config?.responseRule?.maxAttempts ?? 20
   };
 }
 
 function describeResponseRule(rule: ResponseRule, stepType: number) {
+  const transportRetryMinutes = rule.transportRetryIntervalMinutes ?? 3;
+  const transportMaxAttempts = rule.transportMaxAttempts ?? 20;
+  const requestName = stepType === 4 ? "POST" : "consulta";
+  const transportSummary = rule.transportErrorBehavior === "retry"
+    ? `Se houver erro de transporte, manter a etapa em andamento e refazer o ${requestName} a cada ${transportRetryMinutes} minuto(s), no maximo ${transportMaxAttempts} tentativa(s).`
+    : rule.transportErrorBehavior === "advance"
+      ? "Se houver erro de transporte, avancar a etapa mesmo sem resposta HTTP."
+      : "Se houver erro de transporte, marcar a etapa como falha.";
+
   if (!rule.enabled) {
-    return "Sem regra ativa: a etapa usa apenas o sucesso HTTP para decidir se avanca.";
+    return `Sem regra de conteudo ativa: a etapa usa apenas o sucesso HTTP para decidir se avanca. ${transportSummary}`;
   }
 
   const targetPath = rule.targetPath?.trim() || "$";
   const retryMinutes = rule.retryIntervalMinutes ?? 3;
   const maxAttempts = rule.maxAttempts ?? 20;
-  const requestName = stepType === 4 ? "POST" : "consulta";
 
   if (rule.mode === "condition") {
     const operatorLabel = conditionOperatorLabel(rule.operator ?? "equals").toLowerCase();
@@ -259,18 +273,18 @@ function describeResponseRule(rule: ResponseRule, stepType: number) {
         ? "marcar a etapa como falha"
         : "avancar mesmo assim";
 
-    return `Se ${targetPath} for ${operatorLabel}${expectedValue}, mapear a resposta e avancar. Se nao atender, ${mismatch}.`;
+    return `Se ${targetPath} for ${operatorLabel}${expectedValue}, mapear a resposta e avancar. Se nao atender, ${mismatch}. ${transportSummary}`;
   }
 
   if (rule.emptyBehavior === "retry") {
-    return `Se ${targetPath} estiver vazio, manter a etapa em andamento e refazer o ${requestName} a cada ${retryMinutes} minuto(s), no maximo ${maxAttempts} tentativa(s). Se tiver conteudo, mapear e avancar.`;
+    return `Se ${targetPath} estiver vazio, manter a etapa em andamento e refazer o ${requestName} a cada ${retryMinutes} minuto(s), no maximo ${maxAttempts} tentativa(s). Se tiver conteudo, mapear e avancar. ${transportSummary}`;
   }
 
   if (rule.emptyBehavior === "fail") {
-    return `Se ${targetPath} estiver vazio, marcar a etapa como falha. Se tiver conteudo, mapear e avancar.`;
+    return `Se ${targetPath} estiver vazio, marcar a etapa como falha. Se tiver conteudo, mapear e avancar. ${transportSummary}`;
   }
 
-  return `Se ${targetPath} estiver vazio, aceitar o retorno e avancar. Se tiver conteudo, mapear e avancar.`;
+  return `Se ${targetPath} estiver vazio, aceitar o retorno e avancar. Se tiver conteudo, mapear e avancar. ${transportSummary}`;
 }
 
 const conditionOperatorOptions: Record<string, { value: string; label: string }[]> = {
@@ -889,6 +903,40 @@ function ResponseRuleEditor({
           <div className="field">
             <label>Limite de tentativas</label>
             <input className="input" type="number" min={1} max={100000} value={rule.maxAttempts ?? 20} onChange={e => patchRule({ maxAttempts: Math.max(1, Number(e.target.value) || 1) })} disabled={!isDraft || !rule.enabled} />
+          </div>
+        </>
+      )}
+
+      <div className="field span2">
+        <label>Se houver erro de transporte (sem status HTTP)</label>
+        <select
+          className="select"
+          value={rule.transportErrorBehavior ?? "fail"}
+          onChange={e => patchRule({
+            transportErrorBehavior: e.target.value,
+            transportRetryIntervalMinutes: e.target.value === "retry" ? rule.transportRetryIntervalMinutes ?? 3 : rule.transportRetryIntervalMinutes,
+            transportMaxAttempts: e.target.value === "retry" ? rule.transportMaxAttempts ?? 20 : rule.transportMaxAttempts
+          })}
+          disabled={!isDraft}
+        >
+          <option value="retry">Tentar novamente</option>
+          <option value="fail">Falhar</option>
+          <option value="advance">Avancar</option>
+        </select>
+        <div className="section-copy" style={{ marginTop: 8 }}>
+          Use esta opcao para timeout, DNS, conexao recusada, rota indisponivel ou outros erros sem resposta HTTP.
+        </div>
+      </div>
+
+      {rule.transportErrorBehavior === "retry" && (
+        <>
+          <div className="field">
+            <label>Erro de transporte: nova tentativa a cada (min)</label>
+            <input className="input" type="number" min={1} max={10080} value={rule.transportRetryIntervalMinutes ?? 3} onChange={e => patchRule({ transportRetryIntervalMinutes: Math.max(1, Number(e.target.value) || 1) })} disabled={!isDraft} />
+          </div>
+          <div className="field">
+            <label>Erro de transporte: limite de tentativas</label>
+            <input className="input" type="number" min={1} max={100000} value={rule.transportMaxAttempts ?? 20} onChange={e => patchRule({ transportMaxAttempts: Math.max(1, Number(e.target.value) || 1) })} disabled={!isDraft} />
           </div>
         </>
       )}

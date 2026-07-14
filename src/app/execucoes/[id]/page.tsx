@@ -1927,9 +1927,11 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
 
         {isAwaitingData && (
           <div className="notice" style={{ marginBottom: 16 }}>
-            <strong>{ruleMode === "condition" ? "Consulta aguardando condição da API" : "Consulta aguardando retorno com conteúdo"}</strong>
+            <strong>{ruleMode === "condition" ? "Consulta aguardando condição da API" : ruleMode === "transportError" ? "Consulta aguardando recuperacao de erro de transporte" : "Consulta aguardando retorno com conteúdo"}</strong>
             <div style={{ marginTop: 8 }}>
-              {awaitingDataMessage || "A API respondeu com lista vazia e o sistema continuará tentando automaticamente."}
+              {awaitingDataMessage || (ruleMode === "transportError"
+                ? "A integracao falhou sem resposta HTTP e o sistema continuara tentando automaticamente."
+                : "A API respondeu com lista vazia e o sistema continuará tentando automaticamente.")}
             </div>
             {(actualValue || expectedValue) && (
               <div className="section-copy" style={{ marginTop: 6 }}>
