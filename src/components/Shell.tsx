@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, FilePlus2, Gauge, ListChecks, LogOut, Menu, Play, Settings2, Users, Workflow } from "lucide-react";
+import { Activity, ChevronRight, FilePlus2, Gauge, ListChecks, LogOut, Menu, Play, Settings2, UserCircle2, Users, Workflow } from "lucide-react";
 import { useAuth } from "./Auth";
 
 const items = [
@@ -35,8 +35,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </Link>)}
       </nav>
       <div className="userbox">
-        <strong>{user?.name}</strong>
-        <small>{user?.role?.replace("SuperAdmin", "Super admin")}</small>
+        <Link href="/minha-conta" className="userbox-link">
+          <span className="userbox-head">
+            <span>
+              <strong>{user?.name}</strong>
+              <small>{user?.role?.replace("SuperAdmin", "Super admin")}</small>
+            </span>
+            <ChevronRight size={16} />
+          </span>
+          <span className="userbox-copy">Minha conta e senha</span>
+        </Link>
         <button className="btn btn-ghost" onClick={logout}><LogOut size={16} /> Sair</button>
       </div>
     </aside>
@@ -44,7 +52,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <header className="topbar">
         <button className="btn btn-ghost mobile-only"><Menu /></button>
         <div><strong>Controle operacional</strong></div>
-        <span className="badge completed">Sistema online</span>
+        <div className="topbar-right">
+          <Link href="/minha-conta" className="topbar-user-link">
+            <UserCircle2 size={16} />
+            {user?.name || "Minha conta"}
+          </Link>
+          <span className="badge completed">Sistema online</span>
+        </div>
       </header>
       <div className="content">{children}</div>
     </main>
