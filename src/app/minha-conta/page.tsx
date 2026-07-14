@@ -7,13 +7,11 @@ import { useAuth } from "@/components/Auth";
 import { api } from "@/lib/api";
 
 type PasswordFormState = {
-  currentPassword: string;
   newPassword: string;
   confirmPassword: string;
 };
 
 const initialForm: PasswordFormState = {
-  currentPassword: "",
   newPassword: "",
   confirmPassword: ""
 };
@@ -24,7 +22,6 @@ export default function MyAccountPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -54,7 +51,7 @@ export default function MyAccountPage() {
       <div>
         <span className="eyebrow">Minha conta</span>
         <h1 className="title">Perfil e acesso</h1>
-        <p className="subtitle">Consulte seus dados e altere sua senha com confirmação, sem exibir a senha atual cadastrada.</p>
+        <p className="subtitle">Consulte seus dados e altere sua senha com confirmação, sem exibir a senha cadastrada.</p>
       </div>
     </div>
 
@@ -83,37 +80,13 @@ export default function MyAccountPage() {
       <section className="card formcard">
         <div className="section-icon"><KeyRound size={18} /></div>
         <h2 className="section-title">Alterar senha</h2>
-        <p className="section-copy">Informe sua senha atual e defina uma nova senha com confirmação.</p>
+        <p className="section-copy">Defina uma nova senha e confirme a digitação antes de salvar.</p>
 
         {error && <div className="error">{error}</div>}
         {success && <div className="notice">{success}</div>}
 
         <form onSubmit={submit}>
           <div className="formgrid">
-            <div className="field span2">
-              <label>Senha atual *</label>
-              <div className="password-wrap">
-                <input
-                  className="input"
-                  type={showCurrentPassword ? "text" : "password"}
-                  value={form.currentPassword}
-                  onChange={e => setForm(current => ({ ...current, currentPassword: e.target.value }))}
-                  autoComplete="current-password"
-                  minLength={8}
-                  required
-                />
-                <button
-                  className="icon-btn"
-                  type="button"
-                  aria-label={showCurrentPassword ? "Ocultar senha atual" : "Mostrar senha atual"}
-                  aria-pressed={showCurrentPassword}
-                  onClick={() => setShowCurrentPassword(current => !current)}
-                >
-                  {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-            </div>
-
             <div className="field">
               <label>Nova senha *</label>
               <div className="password-wrap">
