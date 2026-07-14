@@ -222,6 +222,9 @@ function createResponseRule(): ResponseRule {
     transportErrorBehavior: "fail",
     transportRetryIntervalMinutes: 3,
     transportMaxAttempts: 20,
+    httpErrorBehavior: "fail",
+    httpErrorRetryIntervalMinutes: 3,
+    httpErrorMaxAttempts: 20,
     failureBehavior: "fail",
     description: ""
   };
@@ -240,22 +243,32 @@ function normalizeResponseRule(config?: StepApiConfig | null): ResponseRule {
     retryIntervalMinutes: config?.responseRule?.retryIntervalMinutes ?? config?.emptyArrayRetryMinutes ?? 3,
     transportErrorBehavior: config?.responseRule?.transportErrorBehavior ?? "fail",
     transportRetryIntervalMinutes: config?.responseRule?.transportRetryIntervalMinutes ?? config?.responseRule?.retryIntervalMinutes ?? config?.emptyArrayRetryMinutes ?? 3,
-    transportMaxAttempts: config?.responseRule?.transportMaxAttempts ?? config?.responseRule?.maxAttempts ?? 20
+    transportMaxAttempts: config?.responseRule?.transportMaxAttempts ?? config?.responseRule?.maxAttempts ?? 20,
+    httpErrorBehavior: config?.responseRule?.httpErrorBehavior ?? "fail",
+    httpErrorRetryIntervalMinutes: config?.responseRule?.httpErrorRetryIntervalMinutes ?? config?.responseRule?.retryIntervalMinutes ?? config?.emptyArrayRetryMinutes ?? 3,
+    httpErrorMaxAttempts: config?.responseRule?.httpErrorMaxAttempts ?? config?.responseRule?.maxAttempts ?? 20
   };
 }
 
 function describeResponseRule(rule: ResponseRule, stepType: number) {
   const transportRetryMinutes = rule.transportRetryIntervalMinutes ?? 3;
   const transportMaxAttempts = rule.transportMaxAttempts ?? 20;
+  const httpErrorRetryMinutes = rule.httpErrorRetryIntervalMinutes ?? 3;
+  const httpErrorMaxAttempts = rule.httpErrorMaxAttempts ?? 20;
   const requestName = stepType === 4 ? "POST" : "consulta";
   const transportSummary = rule.transportErrorBehavior === "retry"
     ? `Se houver erro de transporte, manter a etapa em andamento e refazer o ${requestName} a cada ${transportRetryMinutes} minuto(s), no maximo ${transportMaxAttempts} tentativa(s).`
     : rule.transportErrorBehavior === "advance"
       ? "Se houver erro de transporte, avancar a etapa mesmo sem resposta HTTP."
       : "Se houver erro de transporte, marcar a etapa como falha.";
+  const httpErrorSummary = rule.httpErrorBehavior === "retry"
+    ? `Se a API responder status fora de 2xx, manter a etapa em andamento e refazer o ${requestName} a cada ${httpErrorRetryMinutes} minuto(s), no maximo ${httpErrorMaxAttempts} tentativa(s).`
+    : rule.httpErrorBehavior === "advance"
+      ? "Se a API responder status fora de 2xx, avancar a etapa mesmo assim."
+      : "Se a API responder status fora de 2xx, marcar a etapa como falha.";
 
   if (!rule.enabled) {
-    return `Sem regra de conteudo ativa: a etapa usa apenas o sucesso HTTP para decidir se avanca. ${transportSummary}`;
+    return `Sem regra de conteudo ativa: a etapa usa apenas o sucesso HTTP para decidir se avanca. ${httpErrorSummary} ${transportSummary}`;
   }
 
   const targetPath = rule.targetPath?.trim() || "$";
@@ -273,18 +286,18 @@ function describeResponseRule(rule: ResponseRule, stepType: number) {
         ? "marcar a etapa como falha"
         : "avancar mesmo assim";
 
-    return `Se ${targetPath} for ${operatorLabel}${expectedValue}, mapear a resposta e avancar. Se nao atender, ${mismatch}. ${transportSummary}`;
+    return `Se ${targetPath} for ${operatorLabel}${expectedValue}, mapear a resposta e avancar. Se nao atender, ${mismatch}. ${httpErrorSummary} ${transportSummary}`;
   }
 
   if (rule.emptyBehavior === "retry") {
-    return `Se ${targetPath} estiver vazio, manter a etapa em andamento e refazer o ${requestName} a cada ${retryMinutes} minuto(s), no maximo ${maxAttempts} tentativa(s). Se tiver conteudo, mapear e avancar. ${transportSummary}`;
+    return `Se ${targetPath} estiver vazio, manter a etapa em andamento e refazer o ${requestName} a cada ${retryMinutes} minuto(s), no maximo ${maxAttempts} tentativa(s). Se tiver conteudo, mapear e avancar. ${httpErrorSummary} ${transportSummary}`;
   }
 
   if (rule.emptyBehavior === "fail") {
-    return `Se ${targetPath} estiver vazio, marcar a etapa como falha. Se tiver conteudo, mapear e avancar. ${transportSummary}`;
+    return `Se ${targetPath} estiver vazio, marcar a etapa como falha. Se tiver conteudo, mapear e avancar. ${httpErrorSummary} ${transportSummary}`;
   }
 
-  return `Se ${targetPath} estiver vazio, aceitar o retorno e avancar. Se tiver conteudo, mapear e avancar. ${transportSummary}`;
+  return `Se ${targetPath} estiver vazio, aceitar o retorno e avancar. Se tiver conteudo, mapear e avancar. ${httpErrorSummary} ${transportSummary}`;
 }
 
 const conditionOperatorOptions: Record<string, { value: string; label: string }[]> = {
@@ -937,6 +950,40 @@ function ResponseRuleEditor({
           <div className="field">
             <label>Erro de transporte: limite de tentativas</label>
             <input className="input" type="number" min={1} max={100000} value={rule.transportMaxAttempts ?? 20} onChange={e => patchRule({ transportMaxAttempts: Math.max(1, Number(e.target.value) || 1) })} disabled={!isDraft} />
+          </div>
+        </>
+      )}
+
+      <div className="field span2">
+        <label>Se status HTTP for fora de 2xx</label>
+        <select
+          className="select"
+          value={rule.httpErrorBehavior ?? "fail"}
+          onChange={e => patchRule({
+            httpErrorBehavior: e.target.value,
+            httpErrorRetryIntervalMinutes: e.target.value === "retry" ? rule.httpErrorRetryIntervalMinutes ?? 3 : rule.httpErrorRetryIntervalMinutes,
+            httpErrorMaxAttempts: e.target.value === "retry" ? rule.httpErrorMaxAttempts ?? 20 : rule.httpErrorMaxAttempts
+          })}
+          disabled={!isDraft}
+        >
+          <option value="retry">Tentar novamente</option>
+          <option value="fail">Falhar</option>
+          <option value="advance">Avancar</option>
+        </select>
+        <div className="section-copy" style={{ marginTop: 8 }}>
+          Use esta opcao para 400, 401, 403, 404, 500, 502, 503, 504 e outros status fora da faixa 2xx.
+        </div>
+      </div>
+
+      {rule.httpErrorBehavior === "retry" && (
+        <>
+          <div className="field">
+            <label>Erro HTTP: nova tentativa a cada (min)</label>
+            <input className="input" type="number" min={1} max={10080} value={rule.httpErrorRetryIntervalMinutes ?? 3} onChange={e => patchRule({ httpErrorRetryIntervalMinutes: Math.max(1, Number(e.target.value) || 1) })} disabled={!isDraft} />
+          </div>
+          <div className="field">
+            <label>Erro HTTP: limite de tentativas</label>
+            <input className="input" type="number" min={1} max={100000} value={rule.httpErrorMaxAttempts ?? 20} onChange={e => patchRule({ httpErrorMaxAttempts: Math.max(1, Number(e.target.value) || 1) })} disabled={!isDraft} />
           </div>
         </>
       )}
