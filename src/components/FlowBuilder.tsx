@@ -1771,6 +1771,20 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                         })}
                         disabled={!isDraft}
                       />
+                      {fieldSupportsNfeLookup(field.type) && <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+                        <label className="toggle-line compact">
+                          <input
+                            type="checkbox"
+                            checked={field.automation?.enableNfeLookup ?? false}
+                            onChange={e => updateField(stepIndex, fieldIndex, {
+                              automation: e.target.checked ? createFieldAutomationConfig() : null
+                            })}
+                            disabled={!isDraft}
+                          />
+                          Consultar NF-e via API
+                        </label>
+                        <small className="section-copy">Ao sair deste campo com a chave de acesso, a etapa consulta a API e tenta preencher os demais dados da nota.</small>
+                      </div>}
                     </td>
                     <td>
                       <input className="input" placeholder="chave_do_campo" value={field.key} onChange={e => updateField(stepIndex, fieldIndex, { key: slugify(e.target.value) })} disabled={!isDraft} />
@@ -1802,29 +1816,6 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                       </button>
                     </td>
                   </tr>
-                  {fieldSupportsNfeLookup(field.type) && <tr key={`${field.id ?? "new"}-${fieldIndex}-automation`}>
-                    <td colSpan={6} className="fields-table-subrow">
-                      <div className="options-box fields-table-options">
-                        <div className="section-header">
-                          <div>
-                            <h4>Automacao do campo</h4>
-                            <p className="section-copy">Marque este campo quando ele receber a chave de acesso usada na rotina automatica de consulta de NF-e.</p>
-                          </div>
-                        </div>
-                        <label className="toggle-line compact">
-                          <input
-                            type="checkbox"
-                            checked={field.automation?.enableNfeLookup ?? false}
-                            onChange={e => updateField(stepIndex, fieldIndex, {
-                              automation: e.target.checked ? createFieldAutomationConfig() : null
-                            })}
-                            disabled={!isDraft}
-                          />
-                          Usar este campo como chave da consulta NF-e
-                        </label>
-                      </div>
-                    </td>
-                  </tr>}
                   {fieldSupportsOptions(field.type) && <tr key={`${field.id ?? "new"}-${fieldIndex}-options`}>
                     <td colSpan={6} className="fields-table-subrow">
                       <div className="options-box fields-table-options">
@@ -2620,6 +2611,20 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                             })}
                             disabled={!isDraft}
                           />
+                          {fieldSupportsNfeLookup(field.type) && <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+                            <label className="toggle-line compact">
+                              <input
+                                type="checkbox"
+                                checked={field.automation?.enableNfeLookup ?? false}
+                                onChange={e => updateField(editingStep, fieldIndex, {
+                                  automation: e.target.checked ? createFieldAutomationConfig() : null
+                                })}
+                                disabled={!isDraft}
+                              />
+                              Consultar NF-e via API
+                            </label>
+                            <small className="section-copy">Ao sair deste campo com a chave de acesso, a etapa consulta a API e tenta preencher os demais dados da nota.</small>
+                          </div>}
                         </td>
                         <td>
                           <input className="input" placeholder="chave_do_campo" value={field.key} onChange={e => updateField(editingStep, fieldIndex, { key: slugify(e.target.value) })} disabled={!isDraft} />
@@ -2651,29 +2656,6 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                           </button>
                         </td>
                       </tr>
-                      {fieldSupportsNfeLookup(field.type) && <tr key={`${field.id ?? "new"}-${fieldIndex}-automation`}>
-                        <td colSpan={6} className="fields-table-subrow">
-                          <div className="options-box fields-table-options">
-                            <div className="section-header">
-                              <div>
-                                <h4>Automacao do campo</h4>
-                                <p className="section-copy">Marque este campo quando ele receber a chave de acesso usada na rotina automatica de consulta de NF-e.</p>
-                              </div>
-                            </div>
-                            <label className="toggle-line compact">
-                              <input
-                                type="checkbox"
-                                checked={field.automation?.enableNfeLookup ?? false}
-                                onChange={e => updateField(editingStep, fieldIndex, {
-                                  automation: e.target.checked ? createFieldAutomationConfig() : null
-                                })}
-                                disabled={!isDraft}
-                              />
-                              Usar este campo como chave da consulta NF-e
-                            </label>
-                          </div>
-                        </td>
-                      </tr>}
                       {fieldSupportsOptions(field.type) && <tr key={`${field.id ?? "new"}-${fieldIndex}-options`}>
                         <td colSpan={6} className="fields-table-subrow">
                           <div className="options-box fields-table-options">
