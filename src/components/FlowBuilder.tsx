@@ -1,7 +1,7 @@
 "use client";
 
 import { api } from "@/lib/api";
-import type { BodyFieldMapping, Field, FieldOption, Flow, FlowToken, IntegrationTestResult, RequestHeader, ResponseFieldMapping, ResponseRule, Step, StepApiConfig, User } from "@/lib/types";
+import type { BodyFieldMapping, Field, FieldAutomationConfig, FieldOption, Flow, FlowToken, IntegrationTestResult, RequestHeader, ResponseFieldMapping, ResponseRule, Step, StepApiConfig, User } from "@/lib/types";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronUp, Copy, Eye, EyeOff, PencilLine, Plus, Save, Send, Shield, Trash2, Workflow } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -98,11 +98,15 @@ function createOption(parentFieldType?: number): FieldOption {
 }
 
 function createField(): Field {
-  return { label: "", key: "", type: 0, mask: "", required: false, order: 1, options: [] };
+  return { label: "", key: "", type: 0, mask: "", required: false, order: 1, options: [], automation: null };
 }
 
-function createTemplateField(label: string, key: string, type = 0, mask = "", required = false, options: FieldOption[] = []): Field {
-  return { label, key, type, mask, required, order: 1, options };
+function createFieldAutomationConfig(role = "accessKey"): FieldAutomationConfig {
+  return { enableNfeLookup: true, nfeLookupRole: role };
+}
+
+function createTemplateField(label: string, key: string, type = 0, mask = "", required = false, options: FieldOption[] = [], automation: FieldAutomationConfig | null = null): Field {
+  return { label, key, type, mask, required, order: 1, options, automation };
 }
 
 function createTemplateOption(label: string, key: string, type = 0, mask = "", required = false): FieldOption {
@@ -127,7 +131,7 @@ const danfeItemOptions: FieldOption[] = [
 ];
 
 const danfeTemplateFields: Field[] = [
-  createTemplateField("Chave de acesso", "nfe_chave_acesso", 0, "", true),
+  createTemplateField("Chave de acesso", "nfe_chave_acesso", 0, "", true, [], createFieldAutomationConfig()),
   createTemplateField("Numero da NF-e", "nfe_numero", 0, "", true),
   createTemplateField("Serie", "nfe_serie"),
   createTemplateField("Natureza da operacao", "nfe_natureza_operacao"),
@@ -369,6 +373,10 @@ function fieldSupportsOptions(fieldType: number) {
 
 function fieldSupportsMask(fieldType: number) {
   return fieldType !== 5 && fieldType !== 6 && fieldType !== 8 && fieldType !== 3 && fieldType !== 7;
+}
+
+function fieldSupportsNfeLookup(fieldType: number) {
+  return fieldType === 0;
 }
 
 function scheduleHelperText(scheduleMode?: string, scheduleValue?: string, helperText?: string | null, stepType?: number) {
@@ -1562,6 +1570,12 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
           order: fieldIndex + 1,
           key: field.key.trim(),
           label: field.label.trim(),
+          automation: fieldSupportsNfeLookup(field.type) && field.automation?.enableNfeLookup
+            ? {
+              enableNfeLookup: true,
+              nfeLookupRole: field.automation.nfeLookupRole?.trim() || "accessKey"
+            }
+            : null,
           options: field.options.map((option, optionIndex) => ({
             ...option,
             order: optionIndex + 1,
@@ -1765,6 +1779,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                       <select className="select" value={field.type} onChange={e => updateField(stepIndex, fieldIndex, {
                         type: Number(e.target.value),
                         mask: fieldSupportsMask(Number(e.target.value)) ? field.mask ?? "" : "",
+                        automation: fieldSupportsNfeLookup(Number(e.target.value)) ? field.automation ?? null : null,
                         options: fieldSupportsOptions(Number(e.target.value)) ? (field.options.length ? field.options : [createOption(Number(e.target.value))]) : []
                       })} disabled={!isDraft}>
                         {fieldTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -1787,6 +1802,29 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                       </button>
                     </td>
                   </tr>
+                  {fieldSupportsNfeLookup(field.type) && <tr key={`${field.id ?? "new"}-${fieldIndex}-automation`}>
+                    <td colSpan={6} className="fields-table-subrow">
+                      <div className="options-box fields-table-options">
+                        <div className="section-header">
+                          <div>
+                            <h4>Automacao do campo</h4>
+                            <p className="section-copy">Marque este campo quando ele receber a chave de acesso usada na rotina automatica de consulta de NF-e.</p>
+                          </div>
+                        </div>
+                        <label className="toggle-line compact">
+                          <input
+                            type="checkbox"
+                            checked={field.automation?.enableNfeLookup ?? false}
+                            onChange={e => updateField(stepIndex, fieldIndex, {
+                              automation: e.target.checked ? createFieldAutomationConfig() : null
+                            })}
+                            disabled={!isDraft}
+                          />
+                          Usar este campo como chave da consulta NF-e
+                        </label>
+                      </div>
+                    </td>
+                  </tr>}
                   {fieldSupportsOptions(field.type) && <tr key={`${field.id ?? "new"}-${fieldIndex}-options`}>
                     <td colSpan={6} className="fields-table-subrow">
                       <div className="options-box fields-table-options">
@@ -2590,6 +2628,7 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                           <select className="select" value={field.type} onChange={e => updateField(editingStep, fieldIndex, {
                             type: Number(e.target.value),
                             mask: fieldSupportsMask(Number(e.target.value)) ? field.mask ?? "" : "",
+                            automation: fieldSupportsNfeLookup(Number(e.target.value)) ? field.automation ?? null : null,
                             options: fieldSupportsOptions(Number(e.target.value)) ? (field.options.length ? field.options : [createOption(Number(e.target.value))]) : []
                           })} disabled={!isDraft}>
                             {fieldTypeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -2612,6 +2651,29 @@ export function FlowBuilder({ flowId }: { flowId?: string }) {
                           </button>
                         </td>
                       </tr>
+                      {fieldSupportsNfeLookup(field.type) && <tr key={`${field.id ?? "new"}-${fieldIndex}-automation`}>
+                        <td colSpan={6} className="fields-table-subrow">
+                          <div className="options-box fields-table-options">
+                            <div className="section-header">
+                              <div>
+                                <h4>Automacao do campo</h4>
+                                <p className="section-copy">Marque este campo quando ele receber a chave de acesso usada na rotina automatica de consulta de NF-e.</p>
+                              </div>
+                            </div>
+                            <label className="toggle-line compact">
+                              <input
+                                type="checkbox"
+                                checked={field.automation?.enableNfeLookup ?? false}
+                                onChange={e => updateField(editingStep, fieldIndex, {
+                                  automation: e.target.checked ? createFieldAutomationConfig() : null
+                                })}
+                                disabled={!isDraft}
+                              />
+                              Usar este campo como chave da consulta NF-e
+                            </label>
+                          </div>
+                        </td>
+                      </tr>}
                       {fieldSupportsOptions(field.type) && <tr key={`${field.id ?? "new"}-${fieldIndex}-options`}>
                         <td colSpan={6} className="fields-table-subrow">
                           <div className="options-box fields-table-options">
