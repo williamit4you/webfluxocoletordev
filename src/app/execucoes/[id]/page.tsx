@@ -1361,6 +1361,11 @@ function syncCurrentStepState(result: Instance, setItem: (value: Instance) => vo
   setNotes(currentStep.notes ?? "");
 }
 
+function isNfeLookupField(field: ExecutionField) {
+  return !!field.automation?.enableNfeLookup
+    && (field.automation.nfeLookupRole ?? "accessKey") === "accessKey";
+}
+
 function renderUploadField(
   field: ExecutionField,
   value: unknown,
@@ -1526,7 +1531,8 @@ function renderFieldInput(
   value: unknown,
   onChange: (next: unknown) => void,
   onUpload: (fieldKey: string, file?: File | null) => Promise<void>,
-  uploading: boolean
+  uploading: boolean,
+  onBlur?: () => void
 ) {
   if (isStructuredListField(field)) {
     return renderStructuredListField(field, value, onChange);
@@ -1574,7 +1580,7 @@ function renderFieldInput(
   }
 
   const inputType = resolveInputType(field.type, field.mask);
-  return <input className="input" type={inputType} value={toText(value)} onChange={event => onChange(applyMask(field.mask, event.target.value))} />;
+  return <input className="input" type={inputType} value={toText(value)} onChange={event => onChange(applyMask(field.mask, event.target.value))} onBlur={onBlur} />;
 }
 
 export default function Detail({ params }: { params: Promise<{ id: string }> }) {
@@ -1606,6 +1612,7 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
   const [invalidFieldKeys, setInvalidFieldKeys] = useState<string[]>([]);
   const video = useRef<HTMLVideoElement>(null);
   const fieldRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const autoLookupInFlightRef = useRef<Record<string, boolean>>({});
 
   function exitIfForbidden(cause: unknown, reason: "view" | "advance" = "view") {
     if (!(cause instanceof Error) || cause.message !== "Acesso negado.") {
@@ -2439,6 +2446,48 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
     }
   }
 
+  async function triggerNfeLookupOnBlur(field: ExecutionField, nextValue: unknown) {
+    if (!currentStep || !isNfeLookupField(field) || saving || advancing) {
+      return;
+    }
+
+    const normalizedValue = digitsOnly(toText(nextValue));
+    if (normalizedValue.length !== 44) {
+      return;
+    }
+
+    const currentSavedValue = digitsOnly(toText(currentStep.data[field.key] ?? field.value ?? ""));
+    if (currentSavedValue === normalizedValue) {
+      return;
+    }
+
+    if (autoLookupInFlightRef.current[field.key]) {
+      return;
+    }
+
+    autoLookupInFlightRef.current[field.key] = true;
+    setSaving(true);
+    setError("");
+
+    try {
+      const payload = sanitizeStepPayload(currentStep, { ...formData, [field.key]: nextValue });
+      const result = await api<Instance>(`/instances/${id}/save-step`, {
+        method: "POST",
+        body: JSON.stringify({
+          notes,
+          data: payload
+        })
+      });
+
+      syncCurrentStepState(result, setItem, setFormData, setNotes);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível consultar a NF-e automaticamente.");
+    } finally {
+      autoLookupInFlightRef.current[field.key] = false;
+      setSaving(false);
+    }
+  }
+
   async function advance() {
     if (!currentStep) {
       return;
@@ -2650,7 +2699,10 @@ export default function Detail({ params }: { params: Promise<{ id: string }> }) 
                         }
                       },
                       uploadFile,
-                      uploadingFieldKey === field.key
+                      uploadingFieldKey === field.key,
+                      isNfeLookupField(field)
+                        ? () => void triggerNfeLookupOnBlur(field, formData[field.key] ?? "")
+                        : undefined
                     )}
                   </div>
                   {invalidFieldSet.has(field.key) && (
